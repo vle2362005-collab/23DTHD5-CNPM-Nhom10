@@ -705,4 +705,25 @@ const clearNotifications = () => {
     transform: translateY(0);
   }
 }
+
+@media (max-width: 768px) {
+  .search-bar {
+    width: 160px;
+  }
+  .status-text {
+    display: none !important;
+  }
+  .profile-info {
+    display: none !important;
+  }
+  .profile-trigger {
+    padding: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-bar {
+    display: none;
+  }
+}
 </style>

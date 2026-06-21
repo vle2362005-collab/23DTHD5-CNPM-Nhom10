@@ -250,7 +250,7 @@ const warnings = ref<Warning[]>([
 // 3. REACTIVE STATES FOR WORKFLOWS
 // ==========================================
 
-const isCollapsed = ref(false)
+const isCollapsed = ref(window.innerWidth <= 768)
 const currentRole = ref<'admin' | 'pharmacist' | 'manager'>('pharmacist')
 const activeTab = ref('dashboard')
 
@@ -695,6 +695,13 @@ const inventoryAlerts = ref([
       @update:is-collapsed="isCollapsed = $event"
       @change-tab="handleTabChange"
     />
+
+    <!-- Sidebar backdrop for mobile overlay -->
+    <div 
+      class="sidebar-backdrop" 
+      v-show="!isCollapsed" 
+      @click="isCollapsed = true"
+    ></div>
 
     <!-- Right Content container -->
     <div class="main-container">
@@ -1607,6 +1614,7 @@ const inventoryAlerts = ref([
   flex: 1;
   height: 100vh;
   overflow: hidden;
+  min-width: 0;
 }
 
 .content-area {
@@ -2768,5 +2776,24 @@ input:checked + .slider:before {
   padding: 4px 8px;
   border-radius: 4px;
   margin-top: 4px;
+}
+
+/* Sidebar backdrop overlay for mobile view */
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 95;
+  }
 }
 </style>
