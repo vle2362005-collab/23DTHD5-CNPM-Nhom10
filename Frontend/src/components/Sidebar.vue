@@ -407,4 +407,28 @@ const handleTabSelect = (tabId: string) => {
   font-size: 11px;
   color: #475569;
 }
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width) !important;
+    transform: translateX(0);
+    transition: transform var(--transition-normal);
+    box-shadow: var(--shadow-premium);
+  }
+  
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+  
+  .sidebar .brand-text-container,
+  .sidebar .label,
+  .sidebar .btn-text,
+  .sidebar .version-info {
+    display: block !important;
+  }
+}
 </style>

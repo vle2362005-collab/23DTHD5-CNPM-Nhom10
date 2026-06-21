@@ -151,3 +151,52 @@ a {
   fill: var(--text-main);
   text-anchor: middle;
 }
+
+/* Responsive Layout overrides */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width) !important;
+    transform: translateX(0) !important;
+    transition: transform var(--transition-normal) !important;
+    box-shadow: var(--shadow-premium) !important;
+    z-index: 100 !important;
+  }
+  
+  .sidebar.collapsed {
+    transform: translateX(-100%) !important;
+  }
+
+  .sidebar .brand-text-container,
+  .sidebar .label,
+  .sidebar .btn-text,
+  .sidebar .version-info {
+    display: block !important;
+  }
+
+  .search-bar {
+    width: 160px !important;
+  }
+  
+  .status-text {
+    display: none !important;
+  }
+  
+  .profile-info {
+    display: none !important;
+  }
+  
+  .profile-trigger {
+    padding: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-bar {
+    display: none !important;
+  }
+}
+
