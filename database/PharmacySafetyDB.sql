@@ -259,3 +259,24 @@ CREATE TABLE Warnings (
     FOREIGN KEY (AcknowledgedBy) REFERENCES Users(UserId)
 );
 GO
+
+-- ====================================================
+-- SEED DATA FOR ROLES & USERS
+-- ====================================================
+
+-- Enable identity insert to explicitly seed IDs
+SET IDENTITY_INSERT Roles ON;
+INSERT INTO Roles (RoleId, RoleName) VALUES 
+(1, N'Admin'),
+(2, N'Pharmacist'),
+(3, N'Manager');
+SET IDENTITY_INSERT Roles OFF;
+GO
+
+SET IDENTITY_INSERT Users ON;
+INSERT INTO Users (UserId, RoleId, FullName, Email, PasswordHash, Phone, Status, CreatedAt) VALUES 
+(1, 1, N'Nguyễn Minh Quân', N'admin@gmail.com', N'$2a$11$9Wv6x6T5rD8R1n1W1n1W1uX1qX1qX1qX1qX1qX1qX1qX1qX1qX1qX', N'0900000000', N'Active', GETDATE()),
+(2, 2, N'Ds. Trần Thị Mai', N'duocsi@gmail.com', N'$2a$11$9Wv6x6T5rD8R1n1W1n1W1uX1qX1qX1qX1qX1qX1qX1qX1qX1qX1qX', N'0911111111', N'Active', GETDATE()),
+(3, 3, N'Ds. Phạm Thanh Sơn', N'quanly@gmail.com', N'$2a$11$9Wv6x6T5rD8R1n1W1n1W1uX1qX1qX1qX1qX1qX1qX1qX1qX1qX1qX', N'0922222222', N'Active', GETDATE());
+SET IDENTITY_INSERT Users OFF;
+GO
