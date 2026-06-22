@@ -385,11 +385,68 @@ export const ApiService = {
   async getDiseases(): Promise<Disease[]> {
     return apiGet<Disease[]>('/diseases', localMocks.diseases)
   },
+  async createDisease(disease: Omit<Disease, 'DiseaseId'>): Promise<Disease> {
+    return apiPost<Disease, Omit<Disease, 'DiseaseId'>>('/diseases', disease, () => {
+      const newId = localMocks.diseases.length > 0 ? Math.max(...localMocks.diseases.map(d => d.DiseaseId)) + 1 : 1
+      const newDisease: Disease = {
+        ...disease,
+        DiseaseId: newId
+      }
+      localMocks.diseases.push(newDisease)
+      return newDisease
+    })
+  },
+  async updateDisease(id: number, disease: Disease): Promise<Disease> {
+    return apiPut<Disease, Disease>(`/diseases/${id}`, disease, () => {
+      const idx = localMocks.diseases.findIndex(d => d.DiseaseId == id)
+      if (idx >= 0) localMocks.diseases[idx] = disease
+      return disease
+    })
+  },
+  async deleteDisease(id: number): Promise<boolean> {
+    return apiDelete(`/diseases/${id}`, () => {
+      const idx = localMocks.diseases.findIndex(d => d.DiseaseId == id)
+      if (idx >= 0) {
+        localMocks.diseases.splice(idx, 1)
+        localMocks.patientDiseases = localMocks.patientDiseases.filter(pd => pd.DiseaseId !== id)
+        return true
+      }
+      return false
+    })
+  },
   async getPatientDiseases(): Promise<PatientDisease[]> {
     return apiGet<PatientDisease[]>('/patientdiseases', localMocks.patientDiseases)
   },
   async getPatientAllergies(): Promise<PatientAllergy[]> {
     return apiGet<PatientAllergy[]>('/patientallergies', localMocks.patientAllergies)
+  },
+  async createPatientAllergy(allergy: Omit<PatientAllergy, 'AllergyId'>): Promise<PatientAllergy> {
+    return apiPost<PatientAllergy, Omit<PatientAllergy, 'AllergyId'>>('/patientallergies', allergy, () => {
+      const newId = localMocks.patientAllergies.length > 0 ? Math.max(...localMocks.patientAllergies.map(pa => pa.AllergyId)) + 1 : 1
+      const newAllergy: PatientAllergy = {
+        ...allergy,
+        AllergyId: newId
+      }
+      localMocks.patientAllergies.push(newAllergy)
+      return newAllergy
+    })
+  },
+  async updatePatientAllergy(id: number, allergy: PatientAllergy): Promise<PatientAllergy> {
+    return apiPut<PatientAllergy, PatientAllergy>(`/patientallergies/${id}`, allergy, () => {
+      const idx = localMocks.patientAllergies.findIndex(pa => pa.AllergyId == id)
+      if (idx >= 0) localMocks.patientAllergies[idx] = allergy
+      return allergy
+    })
+  },
+  async deletePatientAllergy(id: number): Promise<boolean> {
+    return apiDelete(`/patientallergies/${id}`, () => {
+      const idx = localMocks.patientAllergies.findIndex(pa => pa.AllergyId == id)
+      if (idx >= 0) {
+        localMocks.patientAllergies.splice(idx, 1)
+        return true
+      }
+      return false
+    })
   },
   async getDrugInteractions(): Promise<DrugInteraction[]> {
     return apiGet<DrugInteraction[]>('/druginteractions', localMocks.drugInteractions)

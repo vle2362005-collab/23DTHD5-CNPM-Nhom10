@@ -594,6 +594,45 @@ export function usePharmacyStore() {
     contraindications.value = contraindications.value.filter(c => c.ContraindicationId !== contraId)
   }
 
+  const addPatientAllergy = async (allergyData: Omit<PatientAllergy, 'AllergyId'>) => {
+    const newAllergy = await ApiService.createPatientAllergy(allergyData)
+    patientAllergies.value.push(newAllergy)
+    return newAllergy
+  }
+
+  const updatePatientAllergy = async (id: number, allergyData: PatientAllergy) => {
+    const updatedAllergy = await ApiService.updatePatientAllergy(id, allergyData)
+    const idx = patientAllergies.value.findIndex(pa => pa.AllergyId === id)
+    if (idx !== -1) {
+      patientAllergies.value[idx] = updatedAllergy
+    }
+  }
+
+  const deletePatientAllergy = async (id: number) => {
+    await ApiService.deletePatientAllergy(id)
+    patientAllergies.value = patientAllergies.value.filter(pa => pa.AllergyId !== id)
+  }
+
+  const addDisease = async (diseaseData: Omit<Disease, 'DiseaseId'>) => {
+    const newDisease = await ApiService.createDisease(diseaseData)
+    diseases.value.push(newDisease)
+    return newDisease
+  }
+
+  const updateDisease = async (id: number, diseaseData: Disease) => {
+    const updatedDisease = await ApiService.updateDisease(id, diseaseData)
+    const idx = diseases.value.findIndex(d => d.DiseaseId === id)
+    if (idx !== -1) {
+      diseases.value[idx] = updatedDisease
+    }
+  }
+
+  const deleteDisease = async (id: number) => {
+    await ApiService.deleteDisease(id)
+    diseases.value = diseases.value.filter(d => d.DiseaseId !== id)
+    patientDiseases.value = patientDiseases.value.filter(pd => pd.DiseaseId !== id)
+  }
+
   const hasInitialized = ref(false)
 
   const initializeStore = async () => {
@@ -688,6 +727,12 @@ export function usePharmacyStore() {
     addContraindication,
     updateContraindication,
     deleteContraindication,
+    addPatientAllergy,
+    updatePatientAllergy,
+    deletePatientAllergy,
+    addDisease,
+    updateDisease,
+    deleteDisease,
     initializeStore
   }
 }

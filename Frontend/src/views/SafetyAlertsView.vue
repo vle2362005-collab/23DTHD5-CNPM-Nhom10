@@ -71,6 +71,170 @@ const formSeverity = ref<'High' | 'Medium' | 'Low'>('High')
 const formDescription = ref('')
 const formRecommendation = ref('')
 
+// Allergies Form State
+const showAllergyModal = ref(false)
+const isEditingAllergy = ref(false)
+const formAllergyId = ref<number | null>(null)
+const formAllergyPatientId = ref<string>('none')
+const formAllergyTargetType = ref<'ingredient' | 'medicine'>('ingredient')
+const formAllergyIngredientId = ref<string>('none')
+const formAllergyMedicineId = ref<string>('none')
+const formAllergySeverity = ref<'High' | 'Medium' | 'Low'>('High')
+const formAllergyNote = ref('')
+
+// Disease Catalog Form State
+const showDiseaseModal = ref(false)
+const isEditingDisease = ref(false)
+const formDiseaseCatalogId = ref<number | null>(null)
+const formDiseaseName = ref('')
+const formDiseaseDescription = ref('')
+
+// --- Allergy CRUD Methods ---
+const openAddAllergy = () => {
+  if (!canManage.value) return
+  isEditingAllergy.value = false
+  formAllergyId.value = null
+  formAllergyPatientId.value = store.patients.value[0] ? store.patients.value[0].PatientId.toString() : 'none'
+  formAllergyTargetType.value = 'ingredient'
+  formAllergyIngredientId.value = store.activeIngredients.value[0] ? store.activeIngredients.value[0].IngredientId.toString() : 'none'
+  formAllergyMedicineId.value = store.medicines.value[0] ? store.medicines.value[0].MedicineId.toString() : 'none'
+  formAllergySeverity.value = 'High'
+  formAllergyNote.value = ''
+  showAllergyModal.value = true
+}
+
+const openEditAllergy = (allergy: any) => {
+  if (!canManage.value) return
+  isEditingAllergy.value = true
+  formAllergyId.value = allergy.AllergyId
+  formAllergyPatientId.value = allergy.PatientId.toString()
+  
+  if (allergy.IngredientId) {
+    formAllergyTargetType.value = 'ingredient'
+    formAllergyIngredientId.value = allergy.IngredientId.toString()
+    formAllergyMedicineId.value = store.medicines.value[0] ? store.medicines.value[0].MedicineId.toString() : 'none'
+  } else if (allergy.MedicineId) {
+    formAllergyTargetType.value = 'medicine'
+    formAllergyMedicineId.value = allergy.MedicineId.toString()
+    formAllergyIngredientId.value = store.activeIngredients.value[0] ? store.activeIngredients.value[0].IngredientId.toString() : 'none'
+  }
+  
+  formAllergySeverity.value = (allergy.Severity === 'Nghiêm trọng' || allergy.Severity === 'High') ? 'High' : (allergy.Severity === 'Trung bình' || allergy.Severity === 'Medium') ? 'Medium' : 'Low'
+  formAllergyNote.value = allergy.AllergyNote || ''
+  showAllergyModal.value = true
+}
+
+const saveAllergy = async () => {
+  if (!canManage.value) return
+  const patId = Number(formAllergyPatientId.value)
+  if (!patId || formAllergyPatientId.value === 'none') {
+    alert('Vui lòng chọn bệnh nhân!')
+    return
+  }
+  
+  const isIngredient = formAllergyTargetType.value === 'ingredient'
+  const ingId = isIngredient && formAllergyIngredientId.value !== 'none' ? Number(formAllergyIngredientId.value) : null
+  const medId = !isIngredient && formAllergyMedicineId.value !== 'none' ? Number(formAllergyMedicineId.value) : null
+  
+  if (isIngredient && !ingId) {
+    alert('Vui lòng chọn hoạt chất!')
+    return
+  }
+  if (!isIngredient && !medId) {
+    alert('Vui lòng chọn biệt dược!')
+    return
+  }
+  
+  const severityString = formAllergySeverity.value === 'High' ? 'Nghiêm trọng' : formAllergySeverity.value === 'Medium' ? 'Trung bình' : 'Nhẹ'
+  
+  const allergyData = {
+    PatientId: patId,
+    IngredientId: ingId,
+    MedicineId: medId,
+    Severity: severityString,
+    AllergyNote: formAllergyNote.value.trim()
+  }
+  
+  if (isEditingAllergy.value && formAllergyId.value !== null) {
+    await store.updatePatientAllergy(formAllergyId.value, {
+      AllergyId: formAllergyId.value,
+      ...allergyData
+    })
+    alert('Cập nhật dị ứng thuốc thành công!')
+  } else {
+    await store.addPatientAllergy(allergyData)
+    alert('Thêm mới dị ứng thuốc thành công!')
+  }
+  
+  showAllergyModal.value = false
+}
+
+const deleteAllergy = async (allergy: any) => {
+  if (!canManage.value) return
+  const pName = store.patients.value.find(p => p.PatientId === allergy.PatientId)?.FullName || 'Bệnh nhân'
+  const agentName = allergy.IngredientId 
+    ? (store.activeIngredients.value.find(i => i.IngredientId === allergy.IngredientId)?.IngredientName || '')
+    : (store.medicines.value.find(m => m.MedicineId === allergy.MedicineId)?.MedicineName || '')
+    
+  if (confirm(`Bạn có chắc chắn muốn xóa dị ứng của "${pName}" đối với "${agentName}" không?`)) {
+    await store.deletePatientAllergy(allergy.AllergyId)
+    alert('Xóa dị ứng thuốc thành công!')
+  }
+}
+
+// --- Disease CRUD Methods ---
+const openAddDisease = () => {
+  if (!canManage.value) return
+  isEditingDisease.value = false
+  formDiseaseCatalogId.value = null
+  formDiseaseName.value = ''
+  formDiseaseDescription.value = ''
+  showDiseaseModal.value = true
+}
+
+const openEditDisease = (disease: any) => {
+  if (!canManage.value) return
+  isEditingDisease.value = true
+  formDiseaseCatalogId.value = disease.DiseaseId
+  formDiseaseName.value = disease.DiseaseName
+  formDiseaseDescription.value = disease.Description || ''
+  showDiseaseModal.value = true
+}
+
+const saveDisease = async () => {
+  if (!canManage.value) return
+  if (!formDiseaseName.value.trim()) {
+    alert('Vui lòng nhập tên bệnh lý nền!')
+    return
+  }
+  
+  const diseaseData = {
+    DiseaseName: formDiseaseName.value.trim(),
+    Description: formDiseaseDescription.value.trim()
+  }
+  
+  if (isEditingDisease.value && formDiseaseCatalogId.value !== null) {
+    await store.updateDisease(formDiseaseCatalogId.value, {
+      DiseaseId: formDiseaseCatalogId.value,
+      ...diseaseData
+    })
+    alert('Cập nhật bệnh lý nền thành công!')
+  } else {
+    await store.addDisease(diseaseData)
+    alert('Thêm bệnh lý nền mới thành công!')
+  }
+  
+  showDiseaseModal.value = false
+}
+
+const deleteDisease = async (disease: any) => {
+  if (!canManage.value) return
+  if (confirm(`Bạn có chắc chắn muốn xóa bệnh lý nền "${disease.DiseaseName}" khỏi danh mục không?\nLưu ý: Tất cả liên kết bệnh lý nền này với bệnh nhân sẽ bị xóa!`)) {
+    await store.deleteDisease(disease.DiseaseId)
+    alert('Xóa bệnh lý nền thành công!')
+  }
+}
+
 // Filtered Contraindications
 const filteredContraindications = computed(() => {
   return store.contraindications.value.filter(c => {
@@ -394,7 +558,15 @@ const deleteContra = async (contra: Contraindication) => {
       TAB 3: PATIENT ALLERGIES
     ========================================== -->
     <div v-if="activeSubTab === 'allergies'" class="grid-card text-section">
-      <h3 class="section-title" style="margin-bottom: 20px;">Danh sách Dị ứng thuốc của bệnh nhân</h3>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 class="section-title" style="margin-bottom: 0;">Danh sách Dị ứng thuốc của bệnh nhân</h3>
+        <button class="primary-btn flex-center" v-if="canManage" @click="openAddAllergy">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Thêm dị ứng thuốc
+        </button>
+      </div>
       
       <!-- Search Panel -->
       <div class="filters-row-contra" style="margin-bottom: 16px;">
@@ -423,6 +595,7 @@ const deleteContra = async (contra: Contraindication) => {
             <th>Tác nhân gây dị ứng</th>
             <th>Mức độ</th>
             <th>Ghi chú lâm sàng (Triệu chứng)</th>
+            <th style="text-align: center; width: 120px;" v-if="canManage">Hành động</th>
           </tr>
         </thead>
         <tbody>
@@ -451,6 +624,16 @@ const deleteContra = async (contra: Contraindication) => {
               </span>
             </td>
             <td><small>{{ pa.AllergyNote || '-' }}</small></td>
+            <td v-if="canManage">
+              <div class="action-buttons-group">
+                <button class="action-btn-icon edit" @click="openEditAllergy(pa)" title="Chỉnh sửa">
+                  ✏️
+                </button>
+                <button class="action-btn-icon delete" @click="deleteAllergy(pa)" title="Xóa dị ứng">
+                  🗑️
+                </button>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -468,7 +651,15 @@ const deleteContra = async (contra: Contraindication) => {
       TAB 4: DISEASES CATALOG
     ========================================== -->
     <div v-if="activeSubTab === 'diseases'" class="grid-card text-section">
-      <h3 class="section-title" style="margin-bottom: 20px;">Danh mục Bệnh lý nền mãn tính (Diseases Catalog)</h3>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 class="section-title" style="margin-bottom: 0;">Danh mục Bệnh lý nền mãn tính (Diseases Catalog)</h3>
+        <button class="primary-btn flex-center" v-if="canManage" @click="openAddDisease">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Thêm bệnh lý nền
+        </button>
+      </div>
       
       <!-- Search Panel -->
       <div class="filters-row-contra" style="margin-bottom: 16px;">
@@ -495,6 +686,7 @@ const deleteContra = async (contra: Contraindication) => {
             <th style="width: 250px;">Tên bệnh nền</th>
             <th>Mô tả chuyên khoa</th>
             <th style="text-align: center; width: 180px;">Số bệnh nhân đang mắc</th>
+            <th style="text-align: center; width: 120px;" v-if="canManage">Hành động</th>
           </tr>
         </thead>
         <tbody>
@@ -505,6 +697,16 @@ const deleteContra = async (contra: Contraindication) => {
               <span class="status-tag info" style="font-weight: 700; padding: 4px 10px;">
                 {{ getDiseasePatientsCount(d.DiseaseId) }} bệnh nhân
               </span>
+            </td>
+            <td v-if="canManage">
+              <div class="action-buttons-group">
+                <button class="action-btn-icon edit" @click="openEditDisease(d)" title="Chỉnh sửa">
+                  ✏️
+                </button>
+                <button class="action-btn-icon delete" @click="deleteDisease(d)" title="Xóa bệnh lý nền">
+                  🗑️
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -622,6 +824,126 @@ const deleteContra = async (contra: Contraindication) => {
         <div class="modal-footer">
           <button class="secondary-btn" @click="showContraModal = false">Hủy</button>
           <button class="primary-btn" @click="saveContra">Lưu lại</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      MODAL: ADD / EDIT PATIENT ALLERGY
+    ========================================== -->
+    <div class="modal-overlay flex-center" v-if="showAllergyModal">
+      <div class="modal-card form-modal">
+        <div class="modal-header">
+          <div class="modal-title-area">
+            <h3>{{ isEditingAllergy ? 'Chỉnh sửa dị ứng thuốc bệnh nhân' : 'Khai báo dị ứng thuốc mới cho bệnh nhân' }}</h3>
+          </div>
+          <button class="close-modal-btn" @click="showAllergyModal = false">×</button>
+        </div>
+
+        <div class="modal-body scrollable-body">
+          <div class="form-inputs-grid-contra">
+            <!-- Patient Dropdown -->
+            <div class="form-group-contra">
+              <label class="form-label-contra required-label-contra">Chọn bệnh nhân:</label>
+              <select v-model="formAllergyPatientId" class="form-control select-control" :disabled="isEditingAllergy">
+                <option value="none" disabled>-- Chọn bệnh nhân --</option>
+                <option v-for="pat in store.patients.value" :key="pat.PatientId" :value="pat.PatientId.toString()">
+                  {{ pat.FullName }} ({{ pat.Phone || 'Không có SĐT' }})
+                </option>
+              </select>
+            </div>
+
+            <!-- Target Type: Ingredient or Medicine -->
+            <div class="form-group-contra">
+              <label class="form-label-contra">Phân loại tác nhân dị ứng:</label>
+              <div class="radio-group-contra">
+                <label class="radio-label-contra">
+                  <input type="radio" value="ingredient" v-model="formAllergyTargetType" />
+                  Theo Hoạt chất chính
+                </label>
+                <label class="radio-label-contra" style="margin-left: 20px;">
+                  <input type="radio" value="medicine" v-model="formAllergyTargetType" />
+                  Theo Biệt dược thương mại
+                </label>
+              </div>
+            </div>
+
+            <!-- Dropdown for Target Selection -->
+            <div class="form-group-contra" v-if="formAllergyTargetType === 'ingredient'">
+              <label class="form-label-contra required-label-contra">Chọn hoạt chất:</label>
+              <select v-model="formAllergyIngredientId" class="form-control select-control">
+                <option value="none" disabled>-- Chọn hoạt chất --</option>
+                <option v-for="ing in store.activeIngredients.value" :key="ing.IngredientId" :value="ing.IngredientId.toString()">
+                  {{ ing.IngredientName }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group-contra" v-else>
+              <label class="form-label-contra required-label-contra">Chọn thuốc/biệt dược:</label>
+              <select v-model="formAllergyMedicineId" class="form-control select-control">
+                <option value="none" disabled>-- Chọn biệt dược --</option>
+                <option v-for="med in store.medicines.value" :key="med.MedicineId" :value="med.MedicineId.toString()">
+                  {{ med.MedicineName }} ({{ med.Strength || 'N/A' }})
+                </option>
+              </select>
+            </div>
+
+            <!-- Severity -->
+            <div class="form-group-contra">
+              <label class="form-label-contra">Mức độ nghiêm trọng:</label>
+              <select v-model="formAllergySeverity" class="form-control select-control">
+                <option value="High">Nghiêm trọng (Phản ứng sốc phản vệ / Nguy hiểm tính mạng)</option>
+                <option value="Medium">Trung bình (Phát ban, ngứa ngáy, sốt nhẹ)</option>
+                <option value="Low">Nhẹ (Khó chịu nhẹ / Triệu chứng không đáng kể)</option>
+              </select>
+            </div>
+
+            <!-- Notes -->
+            <div class="form-group-contra">
+              <label class="form-label-contra">Ghi chú lâm sàng / Triệu chứng:</label>
+              <textarea v-model="formAllergyNote" class="form-control textarea-control" rows="3" placeholder="Ghi chú các biểu hiện dị ứng như mẩn ngứa, khó thở, sốt, phù nề..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="secondary-btn" @click="showAllergyModal = false">Hủy</button>
+          <button class="primary-btn" @click="saveAllergy">Lưu lại</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      MODAL: ADD / EDIT DISEASE
+    ========================================== -->
+    <div class="modal-overlay flex-center" v-if="showDiseaseModal">
+      <div class="modal-card form-modal">
+        <div class="modal-header">
+          <div class="modal-title-area">
+            <h3>{{ isEditingDisease ? 'Chỉnh sửa bệnh lý nền trong danh mục' : 'Thêm bệnh lý nền mới vào danh mục' }}</h3>
+          </div>
+          <button class="close-modal-btn" @click="showDiseaseModal = false">×</button>
+        </div>
+
+        <div class="modal-body scrollable-body">
+          <div class="form-inputs-grid-contra">
+            <!-- Disease Name -->
+            <div class="form-group-contra">
+              <label class="form-label-contra required-label-contra">Tên bệnh lý nền:</label>
+              <input type="text" v-model="formDiseaseName" class="form-control" placeholder="Ví dụ: Đái tháo đường, Suy gan, Rối loạn nhịp tim..." />
+            </div>
+
+            <!-- Disease Description -->
+            <div class="form-group-contra">
+              <label class="form-label-contra">Mô tả chi tiết chuyên khoa:</label>
+              <textarea v-model="formDiseaseDescription" class="form-control textarea-control" rows="4" placeholder="Nhập mô tả chuyên môn về bệnh lý nền để lưu ý dược sĩ..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="secondary-btn" @click="showDiseaseModal = false">Hủy</button>
+          <button class="primary-btn" @click="saveDisease">Lưu lại</button>
         </div>
       </div>
     </div>

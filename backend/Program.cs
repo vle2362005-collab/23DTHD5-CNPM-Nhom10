@@ -316,17 +316,84 @@ app.MapDelete("/api/ingredients/{id:int}", async (int id, PharmacySafetyContext 
 app.MapGet("/api/medicineingredients", async (PharmacySafetyContext context) =>
     await context.MedicineIngredients.ToListAsync());
 
-// --- Diseases ---
+// --- Diseases CRUD ---
 app.MapGet("/api/diseases", async (PharmacySafetyContext context) =>
     await context.Diseases.ToListAsync());
+
+app.MapPost("/api/diseases", async (Disease disease, PharmacySafetyContext context) =>
+{
+    context.Diseases.Add(disease);
+    await context.SaveChangesAsync();
+    return Results.Created($"/api/diseases/{disease.DiseaseId}", disease);
+});
+
+app.MapPut("/api/diseases/{id:int}", async (int id, Disease updatedDisease, PharmacySafetyContext context) =>
+{
+    var disease = await context.Diseases.FindAsync(id);
+    if (disease == null) return Results.NotFound();
+
+    disease.DiseaseName = updatedDisease.DiseaseName;
+    disease.Description = updatedDisease.Description;
+
+    await context.SaveChangesAsync();
+    return Results.Ok(disease);
+});
+
+app.MapDelete("/api/diseases/{id:int}", async (int id, PharmacySafetyContext context) =>
+{
+    var disease = await context.Diseases.FindAsync(id);
+    if (disease == null) return Results.NotFound();
+
+    var patientDiseases = await context.PatientDiseases.Where(pd => pd.DiseaseId == id).ToListAsync();
+    context.PatientDiseases.RemoveRange(patientDiseases);
+
+    var contraindications = await context.Contraindications.Where(c => c.DiseaseId == id).ToListAsync();
+    context.Contraindications.RemoveRange(contraindications);
+
+    context.Diseases.Remove(disease);
+    await context.SaveChangesAsync();
+    return Results.Ok(true);
+});
 
 // --- PatientDiseases ---
 app.MapGet("/api/patientdiseases", async (PharmacySafetyContext context) =>
     await context.PatientDiseases.ToListAsync());
 
-// --- PatientAllergies ---
+// --- PatientAllergies CRUD ---
 app.MapGet("/api/patientallergies", async (PharmacySafetyContext context) =>
     await context.PatientAllergies.ToListAsync());
+
+app.MapPost("/api/patientallergies", async (PatientAllergy allergy, PharmacySafetyContext context) =>
+{
+    context.PatientAllergies.Add(allergy);
+    await context.SaveChangesAsync();
+    return Results.Created($"/api/patientallergies/{allergy.AllergyId}", allergy);
+});
+
+app.MapPut("/api/patientallergies/{id:int}", async (int id, PatientAllergy updatedAllergy, PharmacySafetyContext context) =>
+{
+    var allergy = await context.PatientAllergies.FindAsync(id);
+    if (allergy == null) return Results.NotFound();
+
+    allergy.PatientId = updatedAllergy.PatientId;
+    allergy.IngredientId = updatedAllergy.IngredientId;
+    allergy.MedicineId = updatedAllergy.MedicineId;
+    allergy.AllergyNote = updatedAllergy.AllergyNote;
+    allergy.Severity = updatedAllergy.Severity;
+
+    await context.SaveChangesAsync();
+    return Results.Ok(allergy);
+});
+
+app.MapDelete("/api/patientallergies/{id:int}", async (int id, PharmacySafetyContext context) =>
+{
+    var allergy = await context.PatientAllergies.FindAsync(id);
+    if (allergy == null) return Results.NotFound();
+
+    context.PatientAllergies.Remove(allergy);
+    await context.SaveChangesAsync();
+    return Results.Ok(true);
+});
 
 // --- DrugInteractions ---
 app.MapGet("/api/druginteractions", async (PharmacySafetyContext context) =>
