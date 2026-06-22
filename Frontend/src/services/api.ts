@@ -101,11 +101,25 @@ const checkServerStatus = async () => {
   }
 }
 
-// Request wrappers
+// Request wrappers and headers helper
+const getHeaders = (hasBody = false): HeadersInit => {
+  const headers: Record<string, string> = {}
+  if (hasBody) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const token = localStorage.getItem('safepharm_token')
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
+}
+
 async function apiGet<T>(endpoint: string, fallbackData: T): Promise<T> {
   if (!isBackendOnline) return fallbackData
   try {
-    const res = await fetch(`${BASE_URL}${endpoint}`)
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      headers: getHeaders()
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return await res.json() as T
   } catch (err) {
@@ -119,7 +133,7 @@ async function apiPost<T, R = T>(endpoint: string, body: R, fallbackAction: () =
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(true),
       body: JSON.stringify(body)
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -135,7 +149,7 @@ async function apiPut<T, R = T>(endpoint: string, body: R, fallbackAction: () =>
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(true),
       body: JSON.stringify(body)
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -149,7 +163,10 @@ async function apiPut<T, R = T>(endpoint: string, body: R, fallbackAction: () =>
 async function apiDelete(endpoint: string, fallbackAction: () => boolean): Promise<boolean> {
   if (!isBackendOnline) return fallbackAction()
   try {
-    const res = await fetch(`${BASE_URL}${endpoint}`, { method: 'DELETE' })
+    const res = await fetch(`${BASE_URL}${endpoint}`, { 
+      method: 'DELETE',
+      headers: getHeaders()
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return true
   } catch (err) {
@@ -165,6 +182,22 @@ async function apiDelete(endpoint: string, fallbackAction: () => boolean): Promi
 export const ApiService = {
   async init() {
     await checkServerStatus()
+  },
+
+  // Auth API
+  async loginApi(email: string, pin: string): Promise<{ Token: string; User: User } | null> {
+    try {
+      const res = await fetch(`${BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Email: email, Pin: pin })
+      })
+      if (!res.ok) return null
+      return await res.json() as { Token: string; User: User }
+    } catch (err) {
+      console.error('[API Service] loginApi error:', err)
+      return null
+    }
   },
 
   // Patients
