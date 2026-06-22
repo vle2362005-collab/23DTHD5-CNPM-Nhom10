@@ -31,9 +31,9 @@ const localMocks = {
   ] as ActiveIngredient[],
 
   medicines: [
-    { MedicineId: 1, DrugGroupId: 1, MedicineName: 'Paracetamol 500mg', Strength: '500mg', DosageForm: 'Vien nen', Unit: 'Vien', Price: 2000, RequiresPrescription: false, IsActive: true, Note: 'Thuoc ha sot giam dau', CreatedAt: '2026-06-20' },
-    { MedicineId: 2, DrugGroupId: 2, MedicineName: 'Amoxicillin 500mg', Strength: '500mg', DosageForm: 'Vien nang', Unit: 'Vien', Price: 3000, RequiresPrescription: true, IsActive: true, Note: 'Khang sinh can don', CreatedAt: '2026-06-20' },
-    { MedicineId: 3, DrugGroupId: 3, MedicineName: 'Ibuprofen 400mg', Strength: '400mg', DosageForm: 'Vien nen', Unit: 'Vien', Price: 2500, RequiresPrescription: false, IsActive: true, Note: 'Giam dau khang viem', CreatedAt: '2026-06-20' }
+    { MedicineId: 1, DrugGroupId: 1, MedicineName: 'Paracetamol 500mg', Strength: '500mg', DosageForm: 'Vien nen', Unit: 'Vien', Price: 2000, RequiresPrescription: false, IsActive: true, SideEffects: 'Dung qua lieu co the gay doc cho gan', Note: 'Thuoc ha sot giam dau', CreatedAt: '2026-06-20' },
+    { MedicineId: 2, DrugGroupId: 2, MedicineName: 'Amoxicillin 500mg', Strength: '500mg', DosageForm: 'Vien nang', Unit: 'Vien', Price: 3000, RequiresPrescription: true, IsActive: true, SideEffects: 'Co the gay buon non, di ung da', Note: 'Khang sinh can don', CreatedAt: '2026-06-20' },
+    { MedicineId: 3, DrugGroupId: 3, MedicineName: 'Ibuprofen 400mg', Strength: '400mg', DosageForm: 'Vien nen', Unit: 'Vien', Price: 2500, RequiresPrescription: false, IsActive: true, SideEffects: 'Gay kich ung da day, o chua', Note: 'Giam dau khang viem', CreatedAt: '2026-06-20' }
   ] as Medicine[],
 
   medicineIngredients: [
@@ -317,6 +317,34 @@ export const ApiService = {
   },
   async getContraindications(): Promise<Contraindication[]> {
     return apiGet<Contraindication[]>('/contraindications', localMocks.contraindications)
+  },
+  async createContraindication(contraindication: Omit<Contraindication, 'ContraindicationId'>): Promise<Contraindication> {
+    return apiPost<Contraindication, Omit<Contraindication, 'ContraindicationId'>>('/contraindications', contraindication, () => {
+      const newId = localMocks.contraindications.length > 0 ? Math.max(...localMocks.contraindications.map(c => c.ContraindicationId)) + 1 : 1
+      const newContra: Contraindication = {
+        ...contraindication,
+        ContraindicationId: newId
+      }
+      localMocks.contraindications.push(newContra)
+      return newContra
+    })
+  },
+  async updateContraindication(id: number, contraindication: Contraindication): Promise<Contraindication> {
+    return apiPut<Contraindication, Contraindication>(`/contraindications/${id}`, contraindication, () => {
+      const idx = localMocks.contraindications.findIndex(c => c.ContraindicationId == id)
+      if (idx >= 0) localMocks.contraindications[idx] = contraindication
+      return contraindication
+    })
+  },
+  async deleteContraindication(id: number): Promise<boolean> {
+    return apiDelete(`/contraindications/${id}`, () => {
+      const idx = localMocks.contraindications.findIndex(c => c.ContraindicationId == id)
+      if (idx >= 0) {
+        localMocks.contraindications.splice(idx, 1)
+        return true
+      }
+      return false
+    })
   },
   async getSales(): Promise<Sale[]> {
     return apiGet<Sale[]>('/sales', localMocks.sales)

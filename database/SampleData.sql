@@ -25,11 +25,11 @@ VALUES
 (N'Ibuprofen', N'Hoat chat giam dau khang viem NSAID');
 
 INSERT INTO Medicines
-(DrugGroupId, MedicineName, Strength, DosageForm, Unit, Price, RequiresPrescription, IsActive, Note)
+(DrugGroupId, MedicineName, Strength, DosageForm, Unit, Price, RequiresPrescription, IsActive, SideEffects, Note)
 VALUES
-(1, N'Paracetamol 500mg', N'500mg', N'Vien nen', N'Vien', 2000, 0, 1, N'Thuoc ha sot giam dau'),
-(2, N'Amoxicillin 500mg', N'500mg', N'Vien nang', N'Vien', 3000, 1, 1, N'Khang sinh can don'),
-(3, N'Ibuprofen 400mg', N'400mg', N'Vien nen', N'Vien', 2500, 0, 1, N'Giam dau khang viem');
+(1, N'Paracetamol 500mg', N'500mg', N'Vien nen', N'Vien', 2000, 0, 1, N'Dung qua lieu co the gay doc cho gan', N'Thuoc ha sot giam dau'),
+(2, N'Amoxicillin 500mg', N'500mg', N'Vien nang', N'Vien', 3000, 1, 1, N'Co the gay buon non, di ung da', N'Khang sinh can don'),
+(3, N'Ibuprofen 400mg', N'400mg', N'Vien nen', N'Vien', 2500, 0, 1, N'Gay kich ung da day, o chua', N'Giam dau khang viem');
 
 INSERT INTO MedicineIngredients (MedicineId, IngredientId, Amount)
 VALUES

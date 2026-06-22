@@ -59,6 +59,7 @@ CREATE TABLE Medicines (
     Price DECIMAL(18,2) DEFAULT 0,
     RequiresPrescription BIT DEFAULT 0,
     IsActive BIT DEFAULT 1,
+    SideEffects NVARCHAR(500) NULL,
     Note NVARCHAR(500),
     CreatedAt DATETIME DEFAULT GETDATE(),
 

@@ -51,6 +51,7 @@ export interface Medicine {
   Price: number
   RequiresPrescription: boolean
   IsActive: boolean
+  SideEffects: string | null
   Note: string | null
   CreatedAt: string
 }
@@ -568,6 +569,25 @@ export function usePharmacyStore() {
     activeIngredients.value = activeIngredients.value.filter(ai => ai.IngredientId !== ingredientId)
   }
 
+  const addContraindication = async (contraData: Omit<Contraindication, 'ContraindicationId'>) => {
+    const newContra = await ApiService.createContraindication(contraData)
+    contraindications.value.push(newContra)
+    return newContra
+  }
+
+  const updateContraindication = async (contraId: number, contraData: Contraindication) => {
+    const updatedContra = await ApiService.updateContraindication(contraId, contraData)
+    const idx = contraindications.value.findIndex(c => c.ContraindicationId === contraId)
+    if (idx !== -1) {
+      contraindications.value[idx] = updatedContra
+    }
+  }
+
+  const deleteContraindication = async (contraId: number) => {
+    await ApiService.deleteContraindication(contraId)
+    contraindications.value = contraindications.value.filter(c => c.ContraindicationId !== contraId)
+  }
+
   const hasInitialized = ref(false)
 
   const initializeStore = async () => {
@@ -658,6 +678,9 @@ export function usePharmacyStore() {
     addActiveIngredient,
     updateActiveIngredient,
     deleteActiveIngredient,
+    addContraindication,
+    updateContraindication,
+    deleteContraindication,
     initializeStore
   }
 }

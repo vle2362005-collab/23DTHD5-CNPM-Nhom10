@@ -30,6 +30,7 @@ const formPrice = ref<number>(0)
 const formRequiresPrescription = ref(false)
 const formIsActive = ref(true)
 const formNote = ref('')
+const formSideEffects = ref('') // Added for CNPM-76
 const formIngredients = ref<{ IngredientId: number; Amount: string }[]>([])
 
 // Active Ingredients States
@@ -141,6 +142,18 @@ const getMedicineIngredients = (medId: number) => {
     })
 }
 
+// Fetch contraindications for a medicine
+const getMedicineContraindications = (medId: number) => {
+  const medicineIngredientIds = store.medicineIngredients.value
+    .filter(mi => mi.MedicineId === medId)
+    .map(mi => mi.IngredientId)
+
+  return store.contraindications.value.filter(c => 
+    c.MedicineId === medId || 
+    (c.IngredientId !== null && medicineIngredientIds.includes(c.IngredientId))
+  )
+}
+
 // Reset filters
 const clearFilters = () => {
   searchQuery.value = ''
@@ -174,6 +187,7 @@ const openAddForm = () => {
   formPrice.value = 0
   formRequiresPrescription.value = false
   formIsActive.value = true
+  formSideEffects.value = ''
   formNote.value = ''
   formIngredients.value = []
   showFormModal.value = true
@@ -192,6 +206,7 @@ const openEditForm = (med: Medicine) => {
   formPrice.value = med.Price
   formRequiresPrescription.value = med.RequiresPrescription
   formIsActive.value = med.IsActive
+  formSideEffects.value = med.SideEffects || ''
   formNote.value = med.Note || ''
 
   // Load current ingredients
@@ -239,6 +254,7 @@ const saveMedicine = async () => {
     Price: formPrice.value,
     RequiresPrescription: formRequiresPrescription.value,
     IsActive: formIsActive.value,
+    SideEffects: formSideEffects.value.trim() || null,
     Note: formNote.value
   }
 
@@ -784,6 +800,10 @@ const deleteGroup = async (group: any) => {
               <span class="detail-label">Ghi chú y khoa:</span>
               <p class="detail-text-box">{{ selectedMed.Note }}</p>
             </div>
+            <div class="detail-item span-2" v-if="selectedMed.SideEffects">
+              <span class="detail-label" style="color: var(--danger);">Tác dụng phụ chính:</span>
+              <p class="detail-text-box" style="border-color: rgba(239, 68, 68, 0.15); background-color: rgba(239, 68, 68, 0.02);">{{ selectedMed.SideEffects }}</p>
+            </div>
           </div>
 
           <!-- Active Ingredients linkage block -->
@@ -797,6 +817,35 @@ const deleteGroup = async (group: any) => {
             </div>
             <div class="empty-ingredients-box" v-else>
               <p>Chưa ghi nhận liên kết hoạt chất cho thuốc này trong CSDL.</p>
+            </div>
+          </div>
+
+          <!-- Contraindications linkage block -->
+          <div class="ingredients-linkage-section" style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
+            <h4 class="sub-title" style="color: var(--danger);">Chống chỉ định lâm sàng (Contraindications)</h4>
+            <div class="alert-list" v-if="getMedicineContraindications(selectedMed.MedicineId).length > 0">
+              <div v-for="contra in getMedicineContraindications(selectedMed.MedicineId)" :key="contra.ContraindicationId" class="alert-item high-risk" style="padding: 12px; margin-bottom: 8px; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="alert-badge" style="font-size: 10px; padding: 2px 6px; background-color: var(--danger); color: white;">{{ contra.Severity }}</span>
+                  <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);">
+                    {{ contra.DiseaseId ? 'Chống chỉ định bệnh nền' : 'Đối tượng đặc biệt' }}
+                  </span>
+                </div>
+                <div class="alert-desc" style="font-size: 13px; margin-top: 6px;">
+                  <strong>Điều kiện:</strong> 
+                  <span v-if="contra.DiseaseId" class="tag warning" style="margin-left: 6px; font-size: 11px; background-color: var(--warning-bg); color: var(--warning); padding: 2px 6px; border-radius: 4px;">{{ store.diseases.value.find(d => d.DiseaseId === contra.DiseaseId)?.DiseaseName }}</span>
+                  <span v-else class="tag danger" style="margin-left: 6px; font-size: 11px; background-color: var(--danger-bg); color: var(--danger); padding: 2px 6px; border-radius: 4px;">🤰 Phụ nữ mang thai / Đối tượng đặc biệt</span>
+                </div>
+                <div class="alert-desc" style="font-size: 13px; margin-top: 4px; color: var(--text-main);">
+                  <strong>Mô tả:</strong> {{ contra.Description }}
+                </div>
+                <div class="alert-desc" style="font-size: 13px; margin-top: 4px; color: var(--success); font-weight: 600;">
+                  <strong>Khuyến cáo:</strong> {{ contra.Recommendation }}
+                </div>
+              </div>
+            </div>
+            <div class="empty-ingredients-box" v-else>
+              <p>Chưa ghi nhận chống chỉ định đặc thù cho thuốc này.</p>
             </div>
           </div>
         </div>
@@ -875,6 +924,12 @@ const deleteGroup = async (group: any) => {
                 <span class="checkmark"></span>
                 Cho phép bán lẻ (Active)
               </label>
+            </div>
+
+            <!-- Side Effects -->
+            <div class="form-group span-2">
+              <label class="form-label">Tác dụng phụ chính:</label>
+              <textarea v-model="formSideEffects" class="form-control textarea-control" rows="2" placeholder="Nhập các tác dụng phụ có hại thường gặp (ví dụ: gây buồn ngủ, hại gan, kích ứng dạ dày)..."></textarea>
             </div>
 
             <!-- Notes -->
