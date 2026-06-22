@@ -10,6 +10,9 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.EntityFrameworkCore;
+using Backend.Data;
+using Backend.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +28,10 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddOpenApi();
+
+// Register DbContext
+builder.Services.AddDbContext<PharmacyDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Configure JSON serialization to preserve PascalCase properties
 builder.Services.ConfigureHttpJsonOptions(options => {
@@ -153,19 +160,24 @@ var warnings = new List<Warning>();
 // ENDPOINTS
 // ====================================================
 
-app.MapPost("/api/auth/login", (LoginRequest request) =>
+app.MapPost("/api/auth/login", async (LoginRequest request, PharmacyDbContext db) =>
 {
-    var foundUser = users.FirstOrDefault(u => 
-        u.Email.Equals(request.Email, StringComparison.OrdinalIgnoreCase) && 
-        (u.Phone == request.Pin || request.Pin == "123456")
-    );
+    var dbUser = await db.Users
+        .FirstOrDefaultAsync(u => u.Email == request.Email);
 
-    if (foundUser == null || foundUser.Status != "Active")
+    if (dbUser == null || dbUser.Status != "Active")
     {
         return Results.Json(new { Message = "Email hoặc mã PIN xác thực không đúng" }, statusCode: 401);
     }
 
-    string roleName = foundUser.RoleId switch
+    bool isValidPin = dbUser.Phone == request.Pin || dbUser.PasswordHash == request.Pin || request.Pin == "123456";
+
+    if (!isValidPin)
+    {
+        return Results.Json(new { Message = "Email hoặc mã PIN xác thực không đúng" }, statusCode: 401);
+    }
+
+    string roleName = dbUser.RoleId switch
     {
         1 => "admin",
         3 => "manager",
@@ -177,9 +189,9 @@ app.MapPost("/api/auth/login", (LoginRequest request) =>
     {
         Subject = new ClaimsIdentity(new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, foundUser.UserId.ToString()),
-            new Claim(ClaimTypes.Email, foundUser.Email),
-            new Claim(ClaimTypes.Name, foundUser.FullName),
+            new Claim(ClaimTypes.NameIdentifier, dbUser.UserId.ToString()),
+            new Claim(ClaimTypes.Email, dbUser.Email),
+            new Claim(ClaimTypes.Name, dbUser.FullName),
             new Claim(ClaimTypes.Role, roleName)
         }),
         Expires = DateTime.UtcNow.AddDays(7),
@@ -188,14 +200,39 @@ app.MapPost("/api/auth/login", (LoginRequest request) =>
     var token = tokenHandler.CreateToken(tokenDescriptor);
     var tokenString = tokenHandler.WriteToken(token);
 
+    var userDto = new User(
+        dbUser.UserId,
+        dbUser.RoleId,
+        dbUser.FullName,
+        dbUser.Email,
+        dbUser.Phone,
+        dbUser.Status,
+        dbUser.CreatedAt.ToString("yyyy-MM-dd"),
+        dbUser.PasswordHash
+    );
+
     return Results.Ok(new
     {
         Token = tokenString,
-        User = foundUser
+        User = userDto
     });
 }).AllowAnonymous();
 
-app.MapGet("/api/users", () => Results.Ok(users)).RequireAuthorization();
+app.MapGet("/api/users", async (PharmacyDbContext db) =>
+{
+    var dbUsers = await db.Users.ToListAsync();
+    var userDtos = dbUsers.Select(u => new User(
+        u.UserId,
+        u.RoleId,
+        u.FullName,
+        u.Email,
+        u.Phone,
+        u.Status,
+        u.CreatedAt.ToString("yyyy-MM-dd"),
+        u.PasswordHash
+    ));
+    return Results.Ok(userDtos);
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
 app.MapGet("/api/patients", () => Results.Ok(patients)).RequireAuthorization();
 app.MapGet("/api/druggroups", () => Results.Ok(drugGroups)).RequireAuthorization();
 app.MapGet("/api/ingredients", () => Results.Ok(activeIngredients)).RequireAuthorization();
@@ -217,7 +254,7 @@ app.MapPost("/api/patients", (Patient patient) =>
     var newPat = patient with { PatientId = newId, CreatedAt = DateTime.Now.ToString("yyyy-MM-dd") };
     patients.Add(newPat);
     return Results.Ok(newPat);
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
 
 app.MapPut("/api/patients/{id:int}", (int id, Patient patient) =>
 {
@@ -225,7 +262,7 @@ app.MapPut("/api/patients/{id:int}", (int id, Patient patient) =>
     if (idx < 0) return Results.NotFound("Patient not found");
     patients[idx] = patient with { PatientId = id };
     return Results.Ok(patients[idx]);
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
 
 app.MapDelete("/api/patients/{id:int}", (int id) =>
 {
@@ -233,7 +270,7 @@ app.MapDelete("/api/patients/{id:int}", (int id) =>
     if (idx < 0) return Results.NotFound("Patient not found");
     patients.RemoveAt(idx);
     return Results.Ok(new { success = true });
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
 
 // Medicine CRUD endpoints
 app.MapPost("/api/medicines", (Medicine medicine) =>
@@ -242,7 +279,7 @@ app.MapPost("/api/medicines", (Medicine medicine) =>
     var newMed = medicine with { MedicineId = newId, CreatedAt = DateTime.Now.ToString("yyyy-MM-dd") };
     medicines.Add(newMed);
     return Results.Ok(newMed);
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 app.MapPut("/api/medicines/{id:int}", (int id, Medicine medicine) =>
 {
@@ -250,7 +287,7 @@ app.MapPut("/api/medicines/{id:int}", (int id, Medicine medicine) =>
     if (idx < 0) return Results.NotFound("Medicine not found");
     medicines[idx] = medicine with { MedicineId = id };
     return Results.Ok(medicines[idx]);
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 app.MapDelete("/api/medicines/{id:int}", (int id) =>
 {
@@ -258,7 +295,7 @@ app.MapDelete("/api/medicines/{id:int}", (int id) =>
     if (idx < 0) return Results.NotFound("Medicine not found");
     medicines.RemoveAt(idx);
     return Results.Ok(new { success = true });
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 // Safety Check Endpoint
 app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
@@ -429,7 +466,7 @@ app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
     var highestSeverity = generatedWarnings.Count > 0 ? "Medium" : "None";
     var result = generatedWarnings.Count > 0 ? "Warning" : "Approved";
     return Results.Ok(new { warnings = generatedWarnings, highestSeverity, result });
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
 
 // Create Sale Endpoint
 app.MapPost("/api/sales", (SaleRequest request) =>
@@ -487,45 +524,84 @@ app.MapPost("/api/sales", (SaleRequest request) =>
     }
 
     return Results.Ok(newSale);
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("pharmacist"));
 
 // User CRUD endpoints
-app.MapPost("/api/users", (User user) =>
+app.MapPost("/api/users", async (User userDto, PharmacyDbContext db) =>
 {
-    var newId = users.Any() ? users.Max(u => u.UserId) + 1 : 1;
-    var passwordHash = string.IsNullOrEmpty(user.PasswordHash) 
+    var passwordHash = string.IsNullOrEmpty(userDto.PasswordHash) 
         ? "$2a$11$9Wv6x6T5rD8R1n1W1n1W1uX1qX1qX1qX1qX1qX1qX1qX1qX1qX1qX" 
-        : user.PasswordHash;
-    var newUser = user with { 
-        UserId = newId, 
+        : userDto.PasswordHash;
+
+    var dbUser = new DbUser
+    {
+        RoleId = userDto.RoleId,
+        FullName = userDto.FullName,
+        Email = userDto.Email,
         PasswordHash = passwordHash,
-        CreatedAt = DateTime.Now.ToString("yyyy-MM-dd") 
+        Phone = userDto.Phone,
+        Status = string.IsNullOrEmpty(userDto.Status) ? "Active" : userDto.Status,
+        CreatedAt = DateTime.Now
     };
-    users.Add(newUser);
-    return Results.Ok(newUser);
-}).RequireAuthorization();
 
-app.MapPut("/api/users/{id:int}", (int id, User user) =>
-{
-    var idx = users.FindIndex(u => u.UserId == id);
-    if (idx < 0) return Results.NotFound("User not found");
-    
-    var oldHash = users[idx].PasswordHash;
-    var updatedUser = user with { 
-        UserId = id, 
-        PasswordHash = string.IsNullOrEmpty(user.PasswordHash) ? oldHash : user.PasswordHash 
-    };
-    users[idx] = updatedUser;
-    return Results.Ok(users[idx]);
-}).RequireAuthorization();
+    db.Users.Add(dbUser);
+    await db.SaveChangesAsync();
 
-app.MapDelete("/api/users/{id:int}", (int id) =>
+    var createdUserDto = new User(
+        dbUser.UserId,
+        dbUser.RoleId,
+        dbUser.FullName,
+        dbUser.Email,
+        dbUser.Phone,
+        dbUser.Status,
+        dbUser.CreatedAt.ToString("yyyy-MM-dd"),
+        dbUser.PasswordHash
+    );
+
+    return Results.Ok(createdUserDto);
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapPut("/api/users/{id:int}", async (int id, User userDto, PharmacyDbContext db) =>
 {
-    var idx = users.FindIndex(u => u.UserId == id);
-    if (idx < 0) return Results.NotFound("User not found");
-    users.RemoveAt(idx);
+    var dbUser = await db.Users.FindAsync(id);
+    if (dbUser == null) return Results.NotFound("User not found");
+
+    dbUser.FullName = userDto.FullName;
+    dbUser.Email = userDto.Email;
+    dbUser.RoleId = userDto.RoleId;
+    dbUser.Status = userDto.Status;
+    dbUser.Phone = userDto.Phone;
+    if (!string.IsNullOrEmpty(userDto.PasswordHash))
+    {
+        dbUser.PasswordHash = userDto.PasswordHash;
+    }
+
+    await db.SaveChangesAsync();
+
+    var updatedUserDto = new User(
+        dbUser.UserId,
+        dbUser.RoleId,
+        dbUser.FullName,
+        dbUser.Email,
+        dbUser.Phone,
+        dbUser.Status,
+        dbUser.CreatedAt.ToString("yyyy-MM-dd"),
+        dbUser.PasswordHash
+    );
+
+    return Results.Ok(updatedUserDto);
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapDelete("/api/users/{id:int}", async (int id, PharmacyDbContext db) =>
+{
+    var dbUser = await db.Users.FindAsync(id);
+    if (dbUser == null) return Results.NotFound("User not found");
+
+    db.Users.Remove(dbUser);
+    await db.SaveChangesAsync();
+
     return Results.Ok(new { success = true });
-}).RequireAuthorization();
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 app.Run();
 
