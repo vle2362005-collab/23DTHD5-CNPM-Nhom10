@@ -477,6 +477,10 @@ export function usePharmacyStore() {
     patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== patientId)
   }
 
+  const searchPatients = async (query: string) => {
+    return await ApiService.searchPatients(query)
+  }
+
   const addMedicine = async (
     medicineData: Omit<Medicine, 'MedicineId' | 'CreatedAt'>, 
     ingredients: { IngredientId: number; Amount: string }[]
@@ -671,6 +675,7 @@ export function usePharmacyStore() {
     addPatient,
     updatePatient,
     deletePatient,
+    searchPatients,
     addMedicine,
     updateMedicine,
     deleteMedicine,

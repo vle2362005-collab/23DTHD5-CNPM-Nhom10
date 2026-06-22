@@ -44,9 +44,21 @@ app.UseHttpsRedirection();
 // API ENDPOINTS
 // ==========================================
 
-// --- Patients CRUD ---
 app.MapGet("/api/patients", async (PharmacySafetyContext context) =>
     await context.Patients.ToListAsync());
+
+app.MapGet("/api/patients/search", async (string? query, PharmacySafetyContext context) =>
+{
+    if (string.IsNullOrWhiteSpace(query))
+    {
+        return Results.Ok(await context.Patients.ToListAsync());
+    }
+    var term = query.Trim();
+    var matched = await context.Patients
+        .Where(p => p.FullName.Contains(term) || (p.Phone != null && p.Phone.Contains(term)))
+        .ToListAsync();
+    return Results.Ok(matched);
+});
 
 app.MapPost("/api/patients", async (SavePatientRequest request, PharmacySafetyContext context) =>
 {
