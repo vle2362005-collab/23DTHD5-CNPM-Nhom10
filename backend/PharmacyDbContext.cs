@@ -13,6 +13,8 @@ namespace Backend.Data
         public DbSet<DbRole> Roles { get; set; } = null!;
         public DbSet<DbMedicine> Medicines { get; set; } = null!;
         public DbSet<DbMedicineIngredient> MedicineIngredients { get; set; } = null!;
+        public DbSet<DbDrugGroup> DrugGroups { get; set; } = null!;
+        public DbSet<DbActiveIngredient> ActiveIngredients { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

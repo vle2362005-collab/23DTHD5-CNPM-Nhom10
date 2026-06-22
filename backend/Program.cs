@@ -234,11 +234,69 @@ app.MapGet("/api/users", async (PharmacyDbContext db) =>
     return Results.Ok(userDtos);
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 app.MapGet("/api/patients", () => Results.Ok(patients)).RequireAuthorization();
-app.MapGet("/api/druggroups", () => Results.Ok(drugGroups)).RequireAuthorization();
-app.MapGet("/api/ingredients", () => Results.Ok(activeIngredients)).RequireAuthorization();
-app.MapGet("/api/medicines", async (PharmacyDbContext db) =>
+app.MapGet("/api/druggroups", async (PharmacyDbContext db) =>
 {
-    var dbMedicines = await db.Medicines.ToListAsync();
+    var dbGroups = await db.DrugGroups.ToListAsync();
+    var groupDtos = dbGroups.Select(dg => new DrugGroup(
+        dg.DrugGroupId,
+        dg.GroupName,
+        dg.Description
+    ));
+    return Results.Ok(groupDtos);
+}).RequireAuthorization();
+
+app.MapGet("/api/ingredients", async (PharmacyDbContext db) =>
+{
+    var dbIngredients = await db.ActiveIngredients.ToListAsync();
+    var ingredientDtos = dbIngredients.Select(ai => new ActiveIngredient(
+        ai.IngredientId,
+        ai.IngredientName,
+        ai.Description
+    ));
+    return Results.Ok(ingredientDtos);
+}).RequireAuthorization();
+app.MapGet("/api/medicines", async (
+    string? search, 
+    int? groupId, 
+    bool? requiresPrescription, 
+    bool? isActive, 
+    PharmacyDbContext db) =>
+{
+    var query = db.Medicines.AsQueryable();
+
+    if (groupId.HasValue)
+    {
+        query = query.Where(m => m.DrugGroupId == groupId.Value);
+    }
+
+    if (requiresPrescription.HasValue)
+    {
+        query = query.Where(m => m.RequiresPrescription == requiresPrescription.Value);
+    }
+
+    if (isActive.HasValue)
+    {
+        query = query.Where(m => m.IsActive == isActive.Value);
+    }
+
+    if (!string.IsNullOrEmpty(search))
+    {
+        var lowerSearch = search.ToLower().Trim();
+        
+        var medIdsWithIngredient = await db.MedicineIngredients
+            .Join(db.ActiveIngredients, 
+                mi => mi.IngredientId, 
+                ai => ai.IngredientId, 
+                (mi, ai) => new { mi.MedicineId, ai.IngredientName })
+            .Where(x => x.IngredientName.ToLower().Contains(lowerSearch))
+            .Select(x => x.MedicineId)
+            .Distinct()
+            .ToListAsync();
+
+        query = query.Where(m => m.MedicineName.ToLower().Contains(lowerSearch) || medIdsWithIngredient.Contains(m.MedicineId));
+    }
+
+    var dbMedicines = await query.ToListAsync();
     var medicineDtos = dbMedicines.Select(m => new Medicine(
         m.MedicineId,
         m.DrugGroupId,
