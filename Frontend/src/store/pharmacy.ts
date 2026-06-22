@@ -372,6 +372,8 @@ export function usePharmacyStore() {
       // Reload warnings & details to keep reactive views in sync
       const updatedSales = await ApiService.getSales()
       sales.value = updatedSales
+      const updatedWarnings = await ApiService.getWarnings()
+      warnings.value = updatedWarnings
       
       prescriptionCart.value = []
       safetyWarnings.value = []
@@ -633,6 +635,14 @@ export function usePharmacyStore() {
     patientDiseases.value = patientDiseases.value.filter(pd => pd.DiseaseId !== id)
   }
 
+  const acknowledgePersistedWarning = async (id: number, decision: string) => {
+    const updatedWarning = await ApiService.acknowledgeWarning(id, 2, decision)
+    const idx = warnings.value.findIndex(w => w.WarningId === id)
+    if (idx !== -1) {
+      warnings.value[idx] = updatedWarning
+    }
+  }
+
   const hasInitialized = ref(false)
 
   const initializeStore = async () => {
@@ -652,6 +662,7 @@ export function usePharmacyStore() {
       drugInteractions.value = await ApiService.getDrugInteractions()
       contraindications.value = await ApiService.getContraindications()
       sales.value = await ApiService.getSales()
+      warnings.value = await ApiService.getWarnings()
     } catch (e) {
       console.error('[Store] Failed to initialize store from API:', e)
     }
@@ -733,6 +744,7 @@ export function usePharmacyStore() {
     addDisease,
     updateDisease,
     deleteDisease,
+    acknowledgePersistedWarning,
     initializeStore
   }
 }

@@ -441,6 +441,30 @@ app.MapDelete("/api/contraindications/{id:int}", async (int id, PharmacySafetyCo
 app.MapGet("/api/sales", async (PharmacySafetyContext context) =>
     await context.Sales.OrderByDescending(s => s.SaleId).ToListAsync());
 
+// --- Warnings CRUD & Interventions ---
+app.MapGet("/api/warnings", async (PharmacySafetyContext context) =>
+    await context.Warnings.OrderByDescending(w => w.WarningId).ToListAsync());
+
+app.MapGet("/api/warnings/patient/{patientId:int}", async (int patientId, PharmacySafetyContext context) =>
+    await context.Warnings
+        .Where(w => w.PatientId == patientId)
+        .OrderByDescending(w => w.WarningId)
+        .ToListAsync());
+
+app.MapPut("/api/warnings/{id:int}/acknowledge", async (int id, AcknowledgeWarningRequest request, PharmacySafetyContext context) =>
+{
+    var warning = await context.Warnings.FindAsync(id);
+    if (warning == null) return Results.NotFound();
+
+    warning.IsAcknowledged = request.IsAcknowledged;
+    warning.AcknowledgedBy = request.AcknowledgedBy;
+    warning.AcknowledgedAt = DateTime.Now;
+    warning.Decision = request.Decision;
+
+    await context.SaveChangesAsync();
+    return Results.Ok(warning);
+});
+
 // --- Clinical Safety Check Engine ---
 app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacySafetyContext context) =>
 {
@@ -818,4 +842,11 @@ public class PatientDiseaseSaveDto
 {
     public int DiseaseId { get; set; }
     public string Note { get; set; } = string.Empty;
+}
+
+public class AcknowledgeWarningRequest
+{
+    public bool IsAcknowledged { get; set; }
+    public int? AcknowledgedBy { get; set; }
+    public string Decision { get; set; } = string.Empty;
 }

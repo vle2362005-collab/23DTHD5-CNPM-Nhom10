@@ -721,5 +721,30 @@ export const ApiService = {
 
       return newSale
     })
+  },
+
+  // Warnings & Clinical Interventions
+  async getWarnings(): Promise<Warning[]> {
+    return apiGet<Warning[]>('/warnings', localMocks.warnings)
+  },
+  async getPatientWarnings(patientId: number): Promise<Warning[]> {
+    return apiGet<Warning[]>(`/warnings/patient/${patientId}`, localMocks.warnings.filter(w => w.PatientId === patientId))
+  },
+  async acknowledgeWarning(id: number, pharmacistId: number, decision: string): Promise<Warning> {
+    const payload = {
+      IsAcknowledged: true,
+      AcknowledgedBy: pharmacistId,
+      Decision: decision
+    }
+    return apiPut<Warning, typeof payload>(`/warnings/${id}/acknowledge`, payload, () => {
+      const w = localMocks.warnings.find(warn => warn.WarningId === id)
+      if (w) {
+        w.IsAcknowledged = true
+        w.AcknowledgedBy = pharmacistId
+        w.AcknowledgedAt = new Date().toISOString()
+        w.Decision = decision
+      }
+      return w || {} as Warning
+    })
   }
 }
