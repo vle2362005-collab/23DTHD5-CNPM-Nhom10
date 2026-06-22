@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { ApiService } from '../services/api'
 
 // ==========================================
 // 1. TYPES matching PharmacySafetyDB
@@ -9,7 +10,7 @@ export interface User {
   RoleId: number
   FullName: string
   Email: string
-  Phone: string
+  Phone: string | null
   Status: string
   CreatedAt: string
 }
@@ -17,60 +18,60 @@ export interface User {
 export interface Patient {
   PatientId: number
   FullName: string
-  Phone: string
-  Gender: string
+  Phone: string | null
+  Gender: string | null
   DateOfBirth: string
   WeightKg: number | null
-  Address: string
+  Address: string | null
   IsPregnant: boolean
   IsBreastfeeding: boolean
-  Note: string
+  Note: string | null
   CreatedAt: string
 }
 
 export interface DrugGroup {
   DrugGroupId: number
   GroupName: string
-  Description: string
+  Description: string | null
 }
 
 export interface ActiveIngredient {
   IngredientId: number
   IngredientName: string
-  Description: string
+  Description: string | null
 }
 
 export interface Medicine {
   MedicineId: number
   DrugGroupId: number | null
   MedicineName: string
-  Strength: string
-  DosageForm: string
-  Unit: string
+  Strength: string | null
+  DosageForm: string | null
+  Unit: string | null
   Price: number
   RequiresPrescription: boolean
   IsActive: boolean
-  Note: string
+  Note: string | null
   CreatedAt: string
 }
 
 export interface MedicineIngredient {
   MedicineId: number
   IngredientId: number
-  Amount: string
+  Amount: string | null
 }
 
 export interface Disease {
   DiseaseId: number
   DiseaseName: string
-  Description: string
+  Description: string | null
 }
 
 export interface PatientDisease {
   PatientDiseaseId: number
   PatientId: number
   DiseaseId: number
-  Note: string
+  Note: string | null
 }
 
 export interface PatientAllergy {
@@ -78,17 +79,17 @@ export interface PatientAllergy {
   PatientId: number
   IngredientId: number | null
   MedicineId: number | null
-  AllergyNote: string
-  Severity: string // 'Nghiêm trọng' | 'Trung bình' | 'Nhẹ'
+  AllergyNote: string | null
+  Severity: string | null // 'High' | 'Medium' | 'Low'
 }
 
 export interface DrugInteraction {
   InteractionId: number
   IngredientAId: number
   IngredientBId: number
-  Severity: string // 'Nghiêm trọng' | 'Trung bình' | 'Nhẹ'
-  Description: string
-  Recommendation: string
+  Severity: string
+  Description: string | null
+  Recommendation: string | null
 }
 
 export interface Contraindication {
@@ -96,10 +97,10 @@ export interface Contraindication {
   MedicineId: number | null
   IngredientId: number | null
   DiseaseId: number | null
-  ConditionType: string // 'Bệnh nền chống chỉ định' | 'Đối tượng đặc biệt'
-  Severity: string // 'Nghiêm trọng' | 'Trung bình'
-  Description: string
-  Recommendation: string
+  ConditionType: string
+  Severity: string
+  Description: string | null
+  Recommendation: string | null
 }
 
 export interface Sale {
@@ -111,7 +112,7 @@ export interface Sale {
   TotalAmount: number
   FinalDecision: 'Approved' | 'Denied' | 'Pending'
   Status: 'Completed' | 'Cancelled' | 'Pending'
-  Note: string
+  Note: string | null
 }
 
 export interface SaleDetail {
@@ -122,8 +123,8 @@ export interface SaleDetail {
   UnitPrice: number
   DosageInstruction: string
   TimesPerDay: number
-  Duration: string
-  AdviceNote: string
+  Duration: string | null
+  AdviceNote: string | null
 }
 
 export interface Warning {
@@ -131,10 +132,10 @@ export interface Warning {
   SafetyCheckId: number
   PatientId: number
   MedicineId: number | null
-  WarningType: string // 'Tương tác thuốc' | 'Dị ứng thuốc' | 'Chống chỉ định bệnh nền' | 'Đối tượng đặc biệt'
+  WarningType: string
   Severity: string
   Message: string
-  Recommendation: string
+  Recommendation: string | null
   IsAcknowledged: boolean
   AcknowledgedBy: number | null
   AcknowledgedAt: string | null
@@ -151,106 +152,23 @@ export interface CartItem {
 }
 
 // ==========================================
-// 2. SINGLETON STORE STATE
+// 2. SINGLETON STORE STATE (Initially empty, loaded via API)
 // ==========================================
 
-const users = ref<User[]>([
-  { UserId: 1, RoleId: 1, FullName: 'Admin He Thong', Email: 'admin@gmail.com', Phone: '0900000000', Status: 'Active', CreatedAt: '2026-01-10' },
-  { UserId: 2, RoleId: 2, FullName: 'Duoc Si A', Email: 'duocsi@gmail.com', Phone: '0911111111', Status: 'Active', CreatedAt: '2026-01-15' }
-])
-
-const patients = ref<Patient[]>([
-  { PatientId: 1, FullName: 'Nguyen Van A', Phone: '0988888888', Gender: 'Nam', DateOfBirth: '1990-05-12', WeightKg: 65, Address: 'Gia Lai', IsPregnant: false, IsBreastfeeding: false, Note: 'Co benh nen cao huyet ap', CreatedAt: '2026-06-20' },
-  { PatientId: 2, FullName: 'Tran Thi B', Phone: '0977777777', Gender: 'Nu', DateOfBirth: '1985-10-20', WeightKg: 52, Address: 'Gia Lai', IsPregnant: false, IsBreastfeeding: false, Note: 'Di ung thuoc giam dau', CreatedAt: '2026-06-20' }
-])
-
-const drugGroups = ref<DrugGroup[]>([
-  { DrugGroupId: 1, GroupName: 'Thuoc giam dau ha sot', Description: 'Nhom thuoc dung de giam dau va ha sot' },
-  { DrugGroupId: 2, GroupName: 'Khang sinh', Description: 'Nhom thuoc dieu tri nhiem khuan' },
-  { DrugGroupId: 3, GroupName: 'Khang viem NSAID', Description: 'Nhom thuoc giam dau khang viem' }
-])
-
-const activeIngredients = ref<ActiveIngredient[]>([
-  { IngredientId: 1, IngredientName: 'Paracetamol', Description: 'Hoat chat giam dau ha sot' },
-  { IngredientId: 2, IngredientName: 'Amoxicillin', Description: 'Hoat chat khang sinh nhom Penicillin' },
-  { IngredientId: 3, IngredientName: 'Ibuprofen', Description: 'Hoat chat giam dau khang viem NSAID' }
-])
-
-const medicines = ref<Medicine[]>([
-  { MedicineId: 1, DrugGroupId: 1, MedicineName: 'Paracetamol 500mg', Strength: '500mg', DosageForm: 'Vien nen', Unit: 'Vien', Price: 2000, RequiresPrescription: false, IsActive: true, Note: 'Thuoc ha sot giam dau', CreatedAt: '2026-06-20' },
-  { MedicineId: 2, DrugGroupId: 2, MedicineName: 'Amoxicillin 500mg', Strength: '500mg', DosageForm: 'Vien nang', Unit: 'Vien', Price: 3000, RequiresPrescription: true, IsActive: true, Note: 'Khang sinh can don', CreatedAt: '2026-06-20' },
-  { MedicineId: 3, DrugGroupId: 3, MedicineName: 'Ibuprofen 400mg', Strength: '400mg', DosageForm: 'Vien nen', Unit: 'Vien', Price: 2500, RequiresPrescription: false, IsActive: true, Note: 'Giam dau khang viem', CreatedAt: '2026-06-20' }
-])
-
-const medicineIngredients = ref<MedicineIngredient[]>([
-  { MedicineId: 1, IngredientId: 1, Amount: '500mg' },
-  { MedicineId: 2, IngredientId: 2, Amount: '500mg' },
-  { MedicineId: 3, IngredientId: 3, Amount: '400mg' }
-])
-
-const diseases = ref<Disease[]>([
-  { DiseaseId: 1, DiseaseName: 'Cao huyet ap', Description: 'Benh tang huyet ap' },
-  { DiseaseId: 2, DiseaseName: 'Suy than', Description: 'Benh nhan suy giam chuc nang than' },
-  { DiseaseId: 3, DiseaseName: 'Viem loet da day', Description: 'Benh ly da day' }
-])
-
-const patientDiseases = ref<PatientDisease[]>([
-  { PatientDiseaseId: 1, PatientId: 1, DiseaseId: 1, Note: 'Benh nhan co tien su cao huyet ap' }
-])
-
-const patientAllergies = ref<PatientAllergy[]>([
-  { AllergyId: 1, PatientId: 2, IngredientId: 3, MedicineId: 3, AllergyNote: 'Di ung voi Ibuprofen', Severity: 'High' }
-])
-
-const drugInteractions = ref<DrugInteraction[]>([
-  {
-    InteractionId: 1,
-    IngredientAId: 2, // Amoxicillin
-    IngredientBId: 3, // Ibuprofen
-    Severity: 'Trung bình',
-    Description: 'Amoxicillin va Ibuprofen can than trong khi su dung chung.',
-    Recommendation: 'Can tu van va theo doi trieu chung bat thuong.'
-  }
-])
-
-const contraindications = ref<Contraindication[]>([
-  {
-    ContraindicationId: 1,
-    MedicineId: 3, // Ibuprofen
-    IngredientId: 3, // Ibuprofen
-    DiseaseId: 3, // Viem loet da day
-    ConditionType: 'Disease',
-    Severity: 'Nghiêm trọng',
-    Description: 'Ibuprofen khong phu hop voi benh nhan viem loet da day.',
-    Recommendation: 'Can doi sang thuoc khac an toan hon.'
-  }
-])
-
-const sales = ref<Sale[]>([
-  { SaleId: 1, PatientId: 1, PharmacistId: 2, PrescriptionId: 1, TotalAmount: 7000, FinalDecision: 'Approved', Status: 'Completed', SaleDate: '2026-06-21 14:23', Note: 'Phieu ban thuoc demo' }
-])
-
-const saleDetails = ref<SaleDetail[]>([
-  { SaleDetailId: 1, SaleId: 1, MedicineId: 1, Quantity: 2, UnitPrice: 2000, DosageInstruction: 'Uong 1 vien khi sot', TimesPerDay: 3, Duration: '3 ngay', AdviceNote: 'Khong dung qua lieu' },
-  { SaleDetailId: 2, SaleId: 1, MedicineId: 2, Quantity: 1, UnitPrice: 3000, DosageInstruction: 'Uong theo huong dan cua bac si', TimesPerDay: 2, Duration: '5 ngay', AdviceNote: 'Uong du lieu' }
-])
-
-const warnings = ref<Warning[]>([
-  {
-    WarningId: 1,
-    SafetyCheckId: 1,
-    PatientId: 1,
-    MedicineId: 2,
-    WarningType: 'PrescriptionRequired',
-    Severity: 'Trung bình',
-    Message: 'Thuoc Amoxicillin can co don bac si.',
-    Recommendation: 'Yeu cau benh nhan cung cap don thuoc.',
-    IsAcknowledged: true,
-    AcknowledgedBy: 2,
-    AcknowledgedAt: '2026-06-21 14:20',
-    Decision: 'AllowSale'
-  }
-])
+const users = ref<User[]>([])
+const patients = ref<Patient[]>([])
+const drugGroups = ref<DrugGroup[]>([])
+const activeIngredients = ref<ActiveIngredient[]>([])
+const medicines = ref<Medicine[]>([])
+const medicineIngredients = ref<MedicineIngredient[]>([])
+const diseases = ref<Disease[]>([])
+const patientDiseases = ref<PatientDisease[]>([])
+const patientAllergies = ref<PatientAllergy[]>([])
+const drugInteractions = ref<DrugInteraction[]>([])
+const contraindications = ref<Contraindication[]>([])
+const sales = ref<Sale[]>([])
+const saleDetails = ref<SaleDetail[]>([])
+const warnings = ref<Warning[]>([])
 
 // ==========================================
 // 3. CART & SAFELY ENGINE INTERACTIVE STATE
@@ -279,6 +197,7 @@ const warningDecisions = ref<Record<number, string>>({})
 export function usePharmacyStore() {
   
   const calculateAge = (dobString: string) => {
+    if (!dobString) return 0
     const birthday = new Date(dobString)
     const today = new Date()
     let age = today.getFullYear() - birthday.getFullYear()
@@ -299,7 +218,7 @@ export function usePharmacyStore() {
     const pDiseases = patientDiseases.value.filter(pd => pd.PatientId === selectedPatientId.value)
     return pDiseases.map(pd => {
       const dis = diseases.value.find(d => d.DiseaseId === pd.DiseaseId)
-      return dis ? { name: dis.DiseaseName, note: pd.Note } : null
+      return dis ? { name: dis.DiseaseName, note: pd.Note || '' } : null
     }).filter(Boolean) as { name: string; note: string }[]
   })
 
@@ -315,7 +234,7 @@ export function usePharmacyStore() {
         const med = medicines.value.find(m => m.MedicineId === pa.MedicineId)
         targetName = med ? med.MedicineName : ''
       }
-      return { target: targetName, severity: pa.Severity, note: pa.AllergyNote }
+      return { target: targetName, severity: pa.Severity || 'Nghiêm trọng', note: pa.AllergyNote || '' }
     })
   })
 
@@ -355,166 +274,31 @@ export function usePharmacyStore() {
     safetyWarnings.value = []
   }
 
-  // Run Safety Check Engine
-  const runSafetyCheck = () => {
+  // Run Safety Check Engine via API
+  const runSafetyCheck = async () => {
     if (prescriptionCart.value.length === 0) return
 
-    const generatedWarnings: Warning[] = []
     const patient = activePatient.value
     if (!patient) return
-    const checkId = Math.floor(Math.random() * 1000) + 1
 
-    // Extract ingredients from cart items
-    const cartIngredients: { medicineId: number; ingredientId: number; ingredientName: string }[] = []
-    prescriptionCart.value.forEach(item => {
-      const ingredients = medicineIngredients.value.filter(mi => mi.MedicineId === item.medicine.MedicineId)
-      ingredients.forEach(mi => {
-        const ingName = activeIngredients.value.find(ai => ai.IngredientId === mi.IngredientId)?.IngredientName || ''
-        cartIngredients.push({
-          medicineId: item.medicine.MedicineId,
-          ingredientId: mi.IngredientId,
-          ingredientName: ingName
-        })
-      })
-    })
+    const cartItemsDto = prescriptionCart.value.map(item => ({
+      MedicineId: item.medicine.MedicineId,
+      Quantity: item.quantity,
+      DosageInstruction: item.dosageInstruction,
+      TimesPerDay: item.timesPerDay,
+      Duration: item.duration,
+      AdviceNote: item.adviceNote
+    }))
 
-    // 1. Patient Allergies check
-    const patientAllergiesData = patientAllergies.value.filter(pa => pa.PatientId === patient.PatientId)
-    cartIngredients.forEach(cartIng => {
-      const matchIng = patientAllergiesData.find(pa => pa.IngredientId === cartIng.ingredientId)
-      if (matchIng) {
-        const medName = medicines.value.find(m => m.MedicineId === cartIng.medicineId)?.MedicineName || ''
-        generatedWarnings.push({
-          WarningId: Math.floor(Math.random() * 10000),
-          SafetyCheckId: checkId,
-          PatientId: patient.PatientId,
-          MedicineId: cartIng.medicineId,
-          WarningType: 'Dị ứng thuốc',
-          Severity: matchIng.Severity || 'Nghiêm trọng',
-          Message: `Bệnh nhân dị ứng với hoạt chất [${cartIng.ingredientName}]. Thuốc [${medName}] có chứa hoạt chất này.`,
-          Recommendation: `Ngay lập tức thay thế thuốc [${medName}] bằng một thuốc khác không thuộc cùng nhóm dược lý.`,
-          IsAcknowledged: false,
-          AcknowledgedBy: null,
-          AcknowledgedAt: null,
-          Decision: null
-        })
-      }
-    })
-
-    // 2. Drug Interactions check
-    for (let i = 0; i < cartIngredients.length; i++) {
-      for (let j = i + 1; j < cartIngredients.length; j++) {
-        const ingA = cartIngredients[i]
-        const ingB = cartIngredients[j]
-        if (!ingA || !ingB) continue
-
-        const interact = drugInteractions.value.find(di =>
-          (di.IngredientAId === ingA.ingredientId && di.IngredientBId === ingB.ingredientId) ||
-          (di.IngredientAId === ingB.ingredientId && di.IngredientBId === ingA.ingredientId)
-        )
-
-        if (interact) {
-          const medAName = medicines.value.find(m => m.MedicineId === ingA.medicineId)?.MedicineName || ''
-          const medBName = medicines.value.find(m => m.MedicineId === ingB.medicineId)?.MedicineName || ''
-
-          generatedWarnings.push({
-            WarningId: Math.floor(Math.random() * 10000),
-            SafetyCheckId: checkId,
-            PatientId: patient.PatientId,
-            MedicineId: ingA.medicineId,
-            WarningType: 'Tương tác thuốc',
-            Severity: interact.Severity,
-            Message: `Tương tác nghiêm trọng giữa [${medAName}] (${ingA.ingredientName}) và [${medBName}] (${ingB.ingredientName}). ${interact.Description}`,
-            Recommendation: interact.Recommendation,
-            IsAcknowledged: false,
-            AcknowledgedBy: null,
-            AcknowledgedAt: null,
-            Decision: null
-          })
-        }
-      }
+    try {
+      const res = await ApiService.runSafetyCheck(patient.PatientId, cartItemsDto)
+      safetyWarnings.value = res.warnings
+      hasCheckedSafety.value = true
+      showSafetyResultsModal.value = true
+      finalDecision.value = res.result as 'Approved' | 'Denied' | 'Pending'
+    } catch (e) {
+      console.error('[Safety Check API error]', e)
     }
-
-    // 3. Contraindications check
-    const patientDiseasesData = patientDiseases.value.filter(pd => pd.PatientId === patient.PatientId)
-    cartIngredients.forEach(cartIng => {
-      patientDiseasesData.forEach(pDisease => {
-        const contra = contraindications.value.find(c =>
-          c.DiseaseId === pDisease.DiseaseId &&
-          (c.IngredientId === cartIng.ingredientId || c.MedicineId === cartIng.medicineId)
-        )
-
-        if (contra) {
-          const disName = diseases.value.find(d => d.DiseaseId === pDisease.DiseaseId)?.DiseaseName || ''
-          const medName = medicines.value.find(m => m.MedicineId === cartIng.medicineId)?.MedicineName || ''
-
-          generatedWarnings.push({
-            WarningId: Math.floor(Math.random() * 10000),
-            SafetyCheckId: checkId,
-            PatientId: patient.PatientId,
-            MedicineId: cartIng.medicineId,
-            WarningType: 'Chống chỉ định bệnh nền',
-            Severity: contra.Severity,
-            Message: `Thuốc [${medName}] chống chỉ định ở người có bệnh nền [${disName}]. ${contra.Description}`,
-            Recommendation: contra.Recommendation,
-            IsAcknowledged: false,
-            AcknowledgedBy: null,
-            AcknowledgedAt: null,
-            Decision: null
-          })
-        }
-      })
-
-      if (patient.IsPregnant) {
-        const pregContra = contraindications.value.find(c =>
-          c.ConditionType === 'Đối tượng đặc biệt' &&
-          (c.MedicineId === cartIng.medicineId || c.IngredientId === cartIng.ingredientId)
-        )
-
-        if (pregContra) {
-          const medName = medicines.value.find(m => m.MedicineId === cartIng.medicineId)?.MedicineName || ''
-          generatedWarnings.push({
-            WarningId: Math.floor(Math.random() * 10000),
-            SafetyCheckId: checkId,
-            PatientId: patient.PatientId,
-            MedicineId: cartIng.medicineId,
-            WarningType: 'Đối tượng đặc biệt',
-            Severity: pregContra.Severity,
-            Message: `Thuốc [${medName}] chống chỉ định ở phụ nữ mang thai. ${pregContra.Description}`,
-            Recommendation: pregContra.Recommendation,
-            IsAcknowledged: false,
-            AcknowledgedBy: null,
-            AcknowledgedAt: null,
-            Decision: null
-          })
-        }
-      }
-    })
-
-    // 4. Prescription Required check
-    prescriptionCart.value.forEach(item => {
-      if (item.medicine.RequiresPrescription) {
-        generatedWarnings.push({
-          WarningId: Math.floor(Math.random() * 10000),
-          SafetyCheckId: checkId,
-          PatientId: patient.PatientId,
-          MedicineId: item.medicine.MedicineId,
-          WarningType: 'PrescriptionRequired',
-          Severity: 'Trung bình',
-          Message: `Thuốc [${item.medicine.MedicineName}] yêu cầu phải có đơn thuốc của bác sĩ.`,
-          Recommendation: 'Yêu cầu bệnh nhân cung cấp đơn thuốc hoặc liên hệ bác sĩ kê toa.',
-          IsAcknowledged: false,
-          AcknowledgedBy: null,
-          AcknowledgedAt: null,
-          Decision: null
-        })
-      }
-    })
-
-    safetyWarnings.value = generatedWarnings
-    hasCheckedSafety.value = true
-    showSafetyResultsModal.value = true
-    finalDecision.value = generatedWarnings.length > 0 ? 'Pending' : 'Approved'
   }
 
   // Acknowledge single safety warning
@@ -533,74 +317,245 @@ export function usePharmacyStore() {
   }
 
   // Cancel transaction
-  const cancelPrescription = () => {
+  const cancelPrescription = async () => {
     finalDecision.value = 'Denied'
     showSafetyResultsModal.value = false
 
-    sales.value.unshift({
-      SaleId: sales.value.length + 1,
-      PatientId: selectedPatientId.value,
-      PharmacistId: 2,
-      PrescriptionId: null,
-      SaleDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      TotalAmount: 0,
-      FinalDecision: 'Denied',
-      Status: 'Cancelled',
-      Note: 'Bị từ chối do cảnh báo an toàn nghiêm trọng.'
-    })
-
-    prescriptionCart.value = []
-    safetyWarnings.value = []
-    hasCheckedSafety.value = false
-  }
-
-  // Complete checkout sales transaction
-  const completePrescriptionSales = () => {
-    showSafetyResultsModal.value = false
-    const newSaleId = sales.value.length + 1
-    
-    sales.value.unshift({
-      SaleId: newSaleId,
-      PatientId: selectedPatientId.value,
-      PharmacistId: 2,
-      PrescriptionId: null,
-      SaleDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      TotalAmount: cartTotalAmount.value,
-      FinalDecision: finalDecision.value,
-      Status: 'Completed',
-      Note: finalDecision.value === 'Approved' && safetyWarnings.value.length > 0
-        ? 'Bán sau khi duyệt cảnh báo.'
-        : 'Bán an toàn thông thường.'
-    })
-
-    prescriptionCart.value.forEach(item => {
-      saleDetails.value.push({
-        SaleDetailId: saleDetails.value.length + 1,
-        SaleId: newSaleId,
-        MedicineId: item.medicine.MedicineId,
-        Quantity: item.quantity,
-        UnitPrice: item.medicine.Price,
-        DosageInstruction: item.dosageInstruction,
-        TimesPerDay: item.timesPerDay,
-        Duration: item.duration,
-        AdviceNote: item.adviceNote
-      })
-    })
-
-    if (safetyWarnings.value.length > 0) {
-      safetyWarnings.value.forEach(w => {
-        warnings.value.unshift({
-          ...w,
-          SafetyCheckId: warnings.value.length + 1
-        })
-      })
+    try {
+      const newSale = await ApiService.createPrescriptionSale(
+        selectedPatientId.value,
+        [],
+        'Denied',
+        [],
+        'Bị từ chối do cảnh báo an toàn nghiêm trọng.'
+      )
+      sales.value.unshift(newSale)
+    } catch (e) {
+      console.error('[Cancel Sale API error]', e)
     }
 
     prescriptionCart.value = []
     safetyWarnings.value = []
     hasCheckedSafety.value = false
-    alert('Đã hoàn tất phiếu bán thuốc thành công và cập nhật lịch sử CSDL!')
   }
+
+  // Complete checkout sales transaction via API
+  const completePrescriptionSales = async () => {
+    showSafetyResultsModal.value = false
+    const patient = activePatient.value
+    if (!patient) return
+
+    const cartItemsDto = prescriptionCart.value.map(item => ({
+      MedicineId: item.medicine.MedicineId,
+      Quantity: item.quantity,
+      DosageInstruction: item.dosageInstruction,
+      TimesPerDay: item.timesPerDay,
+      Duration: item.duration,
+      AdviceNote: item.adviceNote
+    }))
+
+    try {
+      const newSale = await ApiService.createPrescriptionSale(
+        patient.PatientId,
+        cartItemsDto,
+        finalDecision.value,
+        safetyWarnings.value,
+        finalDecision.value === 'Approved' && safetyWarnings.value.length > 0
+          ? 'Bán sau khi duyệt cảnh báo.'
+          : 'Bán an toàn thông thường.'
+      )
+      
+      // Update local store sales list
+      sales.value.unshift(newSale)
+      
+      // Reload warnings & details to keep reactive views in sync
+      const updatedSales = await ApiService.getSales()
+      sales.value = updatedSales
+      
+      prescriptionCart.value = []
+      safetyWarnings.value = []
+      hasCheckedSafety.value = false
+      alert('Đã hoàn tất phiếu bán thuốc thành công và cập nhật lịch sử CSDL!')
+    } catch (e) {
+      console.error('[Complete Sale API error]', e)
+    }
+  }
+
+  // ==========================================
+  // 5. CRUD ACTION METHODS (For UI integration)
+  // ==========================================
+
+  const addPatient = async (
+    patientData: Omit<Patient, 'PatientId' | 'CreatedAt'>, 
+    allergies: { isIngredient: boolean; targetId: number; severity: string; note: string }[], 
+    diseasesList: { diseaseId: number; note: string }[]
+  ) => {
+    const newPat = await ApiService.createPatient({
+      ...patientData,
+      Phone: patientData.Phone || null,
+      Gender: patientData.Gender || null,
+      Address: patientData.Address || null,
+      Note: patientData.Note || null
+    })
+    patients.value.push(newPat)
+
+    // Clear and append allergies
+    patientAllergies.value = patientAllergies.value.filter(pa => pa.PatientId !== newPat.PatientId)
+    allergies.forEach(fa => {
+      patientAllergies.value.push({
+        AllergyId: Math.floor(Math.random() * 100000),
+        PatientId: newPat.PatientId,
+        IngredientId: fa.isIngredient ? fa.targetId : null,
+        MedicineId: !fa.isIngredient ? fa.targetId : null,
+        AllergyNote: fa.note,
+        Severity: fa.severity
+      })
+    })
+
+    // Clear and append diseases
+    patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== newPat.PatientId)
+    diseasesList.forEach(fd => {
+      patientDiseases.value.push({
+        PatientDiseaseId: Math.floor(Math.random() * 100000),
+        PatientId: newPat.PatientId,
+        DiseaseId: fd.diseaseId,
+        Note: fd.note
+      })
+    })
+
+    return newPat
+  }
+
+  const updatePatient = async (
+    patientId: number, 
+    patientData: Patient, 
+    allergies: { isIngredient: boolean; targetId: number; severity: string; note: string }[], 
+    diseasesList: { diseaseId: number; note: string }[]
+  ) => {
+    const updatedPat = await ApiService.updatePatient(patientId, {
+      ...patientData,
+      Phone: patientData.Phone || null,
+      Gender: patientData.Gender || null,
+      Address: patientData.Address || null,
+      Note: patientData.Note || null
+    })
+    const idx = patients.value.findIndex(p => p.PatientId === patientId)
+    if (idx !== -1) {
+      patients.value[idx] = updatedPat
+    }
+
+    patientAllergies.value = patientAllergies.value.filter(pa => pa.PatientId !== patientId)
+    allergies.forEach(fa => {
+      patientAllergies.value.push({
+        AllergyId: Math.floor(Math.random() * 100000),
+        PatientId: patientId,
+        IngredientId: fa.isIngredient ? fa.targetId : null,
+        MedicineId: !fa.isIngredient ? fa.targetId : null,
+        AllergyNote: fa.note,
+        Severity: fa.severity
+      })
+    })
+
+    patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== patientId)
+    diseasesList.forEach(fd => {
+      patientDiseases.value.push({
+        PatientDiseaseId: Math.floor(Math.random() * 100000),
+        PatientId: patientId,
+        DiseaseId: fd.diseaseId,
+        Note: fd.note
+      })
+    })
+  }
+
+  const deletePatient = async (patientId: number) => {
+    await ApiService.deletePatient(patientId)
+    patients.value = patients.value.filter(p => p.PatientId !== patientId)
+    patientAllergies.value = patientAllergies.value.filter(pa => pa.PatientId !== patientId)
+    patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== patientId)
+  }
+
+  const addMedicine = async (
+    medicineData: Omit<Medicine, 'MedicineId' | 'CreatedAt'>, 
+    ingredients: { IngredientId: number; Amount: string }[]
+  ) => {
+    const newMed = await ApiService.createMedicine({
+      ...medicineData,
+      Strength: medicineData.Strength || null,
+      DosageForm: medicineData.DosageForm || null,
+      Unit: medicineData.Unit || null,
+      Note: medicineData.Note || null
+    })
+    medicines.value.push(newMed)
+
+    ingredients.forEach(fi => {
+      medicineIngredients.value.push({
+        MedicineId: newMed.MedicineId,
+        IngredientId: fi.IngredientId,
+        Amount: fi.Amount
+      })
+    })
+    return newMed
+  }
+
+  const updateMedicine = async (
+    medicineId: number, 
+    medicineData: Medicine, 
+    ingredients: { IngredientId: number; Amount: string }[]
+  ) => {
+    const updatedMed = await ApiService.updateMedicine(medicineId, {
+      ...medicineData,
+      Strength: medicineData.Strength || null,
+      DosageForm: medicineData.DosageForm || null,
+      Unit: medicineData.Unit || null,
+      Note: medicineData.Note || null
+    })
+    const idx = medicines.value.findIndex(m => m.MedicineId === medicineId)
+    if (idx !== -1) {
+      medicines.value[idx] = updatedMed
+    }
+
+    medicineIngredients.value = medicineIngredients.value.filter(mi => mi.MedicineId !== medicineId)
+    ingredients.forEach(fi => {
+      medicineIngredients.value.push({
+        MedicineId: medicineId,
+        IngredientId: fi.IngredientId,
+        Amount: fi.Amount
+      })
+    })
+  }
+
+  const deleteMedicine = async (medicineId: number) => {
+    await ApiService.deleteMedicine(medicineId)
+    medicines.value = medicines.value.filter(m => m.MedicineId !== medicineId)
+    medicineIngredients.value = medicineIngredients.value.filter(mi => mi.MedicineId !== medicineId)
+  }
+
+  const hasInitialized = ref(false)
+
+  const initializeStore = async () => {
+    if (hasInitialized.value) return
+    hasInitialized.value = true
+    try {
+      await ApiService.init()
+      users.value = await ApiService.getUsers()
+      patients.value = await ApiService.getPatients()
+      drugGroups.value = await ApiService.getDrugGroups()
+      activeIngredients.value = await ApiService.getIngredients()
+      medicines.value = await ApiService.getMedicines()
+      medicineIngredients.value = await ApiService.getMedicineIngredients()
+      diseases.value = await ApiService.getDiseases()
+      patientDiseases.value = await ApiService.getPatientDiseases()
+      patientAllergies.value = await ApiService.getPatientAllergies()
+      drugInteractions.value = await ApiService.getDrugInteractions()
+      contraindications.value = await ApiService.getContraindications()
+      sales.value = await ApiService.getSales()
+    } catch (e) {
+      console.error('[Store] Failed to initialize store from API:', e)
+    }
+  }
+
+  // Trigger init immediately on startup
+  initializeStore()
 
   return {
     // Database tables
@@ -650,6 +605,15 @@ export function usePharmacyStore() {
     runSafetyCheck,
     acknowledgeWarning,
     cancelPrescription,
-    completePrescriptionSales
+    completePrescriptionSales,
+
+    // New API integrations
+    addPatient,
+    updatePatient,
+    deletePatient,
+    addMedicine,
+    updateMedicine,
+    deleteMedicine,
+    initializeStore
   }
 }

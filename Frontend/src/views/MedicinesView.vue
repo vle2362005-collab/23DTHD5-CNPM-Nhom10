@@ -138,19 +138,19 @@ const openEditForm = (med: Medicine) => {
   formMedicineId.value = med.MedicineId
   formMedicineName.value = med.MedicineName
   formDrugGroupId.value = med.DrugGroupId?.toString() || ''
-  formStrength.value = med.Strength
-  formDosageForm.value = med.DosageForm
-  formUnit.value = med.Unit
+  formStrength.value = med.Strength || ''
+  formDosageForm.value = med.DosageForm || ''
+  formUnit.value = med.Unit || ''
   formPrice.value = med.Price
   formRequiresPrescription.value = med.RequiresPrescription
   formIsActive.value = med.IsActive
-  formNote.value = med.Note
+  formNote.value = med.Note || ''
 
   // Load current ingredients
   const currentIngredients = store.medicineIngredients.value.filter(mi => mi.MedicineId === med.MedicineId)
   formIngredients.value = currentIngredients.map(ci => ({
     IngredientId: ci.IngredientId,
-    Amount: ci.Amount
+    Amount: ci.Amount || ''
   }))
 
   showFormModal.value = true
@@ -172,7 +172,7 @@ const removeFormIngredientRow = (index: number) => {
 }
 
 // Save medicine form
-const saveMedicine = () => {
+const saveMedicine = async () => {
   if (!formMedicineName.value.trim()) {
     alert('Vui lòng nhập tên thuốc!')
     return
@@ -182,65 +182,41 @@ const saveMedicine = () => {
     return
   }
 
+  const medicineData = {
+    DrugGroupId: formDrugGroupId.value ? Number(formDrugGroupId.value) : null,
+    MedicineName: formMedicineName.value,
+    Strength: formStrength.value,
+    DosageForm: formDosageForm.value,
+    Unit: formUnit.value,
+    Price: formPrice.value,
+    RequiresPrescription: formRequiresPrescription.value,
+    IsActive: formIsActive.value,
+    Note: formNote.value
+  }
+
   if (isEditing.value && formMedicineId.value !== null) {
     // 1. Edit existing medicine
-    const medIdx = store.medicines.value.findIndex(m => m.MedicineId === formMedicineId.value)
-    if (medIdx !== -1) {
-      const med = store.medicines.value[medIdx]
-      if (med) {
-        med.MedicineName = formMedicineName.value
-        med.DrugGroupId = formDrugGroupId.value ? Number(formDrugGroupId.value) : null
-        med.Strength = formStrength.value
-        med.DosageForm = formDosageForm.value
-        med.Unit = formUnit.value
-        med.Price = formPrice.value
-        med.RequiresPrescription = formRequiresPrescription.value
-        med.IsActive = formIsActive.value
-        med.Note = formNote.value
-      }
-
-      // Update Ingredients association:
-      // Clear old ingredients mapping
-      store.medicineIngredients.value = store.medicineIngredients.value.filter(
-        mi => mi.MedicineId !== formMedicineId.value
-      )
-      // Insert new ingredients mapping
-      formIngredients.value.forEach(fi => {
-        store.medicineIngredients.value.push({
-          MedicineId: formMedicineId.value!,
-          IngredientId: fi.IngredientId,
-          Amount: fi.Amount
-        })
-      })
-    }
-  } else {
-    // 2. Add new medicine
-    const newMedId = store.medicines.value.reduce((max, m) => m.MedicineId > max ? m.MedicineId : max, 0) + 1
-    
-    const newMedicine: Medicine = {
-      MedicineId: newMedId,
-      DrugGroupId: formDrugGroupId.value ? Number(formDrugGroupId.value) : null,
-      MedicineName: formMedicineName.value,
-      Strength: formStrength.value,
-      DosageForm: formDosageForm.value,
-      Unit: formUnit.value,
-      Price: formPrice.value,
-      RequiresPrescription: formRequiresPrescription.value,
-      IsActive: formIsActive.value,
-      Note: formNote.value,
-      CreatedAt: new Date().toISOString().substring(0, 10)
-    }
-
-    store.medicines.value.push(newMedicine)
-
-    // Add ingredients association
-    formIngredients.value.forEach(fi => {
-      store.medicineIngredients.value.push({
-        MedicineId: newMedId,
+    await store.updateMedicine(
+      formMedicineId.value,
+      {
+        MedicineId: formMedicineId.value,
+        ...medicineData,
+        CreatedAt: store.medicines.value.find(m => m.MedicineId === formMedicineId.value)?.CreatedAt || new Date().toISOString().substring(0, 10)
+      },
+      formIngredients.value.map(fi => ({
         IngredientId: fi.IngredientId,
         Amount: fi.Amount
-      })
-    })
+      }))
+    )
+  } else {
+    // 2. Add new medicine
+    await store.addMedicine(
+      medicineData,
+      formIngredients.value.map(fi => ({
+        IngredientId: fi.IngredientId,
+        Amount: fi.Amount
+      }))
+    )
   }
 
   showFormModal.value = false
@@ -248,15 +224,10 @@ const saveMedicine = () => {
 }
 
 // Delete/Remove medicine
-const deleteMedicine = (med: Medicine) => {
+const deleteMedicine = async (med: Medicine) => {
   if (!canManage.value) return
   if (confirm(`Bạn có chắc chắn muốn xóa thuốc "${med.MedicineName}" ra khỏi hệ thống không?`)) {
-    // Hard delete from medicines list
-    store.medicines.value = store.medicines.value.filter(m => m.MedicineId !== med.MedicineId)
-    // Clear ingredients mapping
-    store.medicineIngredients.value = store.medicineIngredients.value.filter(
-      mi => mi.MedicineId !== med.MedicineId
-    )
+    await store.deleteMedicine(med.MedicineId)
     alert('Đã xóa thuốc khỏi hệ thống!')
   }
 }
