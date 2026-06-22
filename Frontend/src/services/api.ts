@@ -170,8 +170,17 @@ export const ApiService = {
   async getPatients(): Promise<Patient[]> {
     return apiGet<Patient[]>('/patients', localMocks.patients)
   },
-  async createPatient(patient: Omit<Patient, 'PatientId' | 'CreatedAt'>): Promise<Patient> {
-    return apiPost<Patient, Omit<Patient, 'PatientId' | 'CreatedAt'>>('/patients', patient, () => {
+  async createPatient(
+    patient: Omit<Patient, 'PatientId' | 'CreatedAt'>,
+    allergies: { isIngredient: boolean; targetId: number; severity: string; note: string }[] = [],
+    diseases: { diseaseId: number; note: string }[] = []
+  ): Promise<Patient> {
+    const payload = {
+      ...patient,
+      Allergies: allergies,
+      Diseases: diseases
+    }
+    return apiPost<Patient, typeof payload>('/patients', payload, () => {
       const newId = localMocks.patients.length > 0 ? Math.max(...localMocks.patients.map(p => p.PatientId)) + 1 : 1
       const newPat: Patient = {
         ...patient,
@@ -179,13 +188,73 @@ export const ApiService = {
         CreatedAt: new Date().toISOString().substring(0, 10)
       }
       localMocks.patients.push(newPat)
+
+      // Sync mock allergies
+      localMocks.patientAllergies = localMocks.patientAllergies.filter(pa => pa.PatientId !== newPat.PatientId)
+      allergies.forEach(fa => {
+        localMocks.patientAllergies.push({
+          AllergyId: Math.floor(Math.random() * 100000),
+          PatientId: newPat.PatientId,
+          IngredientId: fa.isIngredient ? fa.targetId : null,
+          MedicineId: !fa.isIngredient ? fa.targetId : null,
+          AllergyNote: fa.note,
+          Severity: fa.severity
+        })
+      })
+
+      // Sync mock diseases
+      localMocks.patientDiseases = localMocks.patientDiseases.filter(pd => pd.PatientId !== newPat.PatientId)
+      diseases.forEach(fd => {
+        localMocks.patientDiseases.push({
+          PatientDiseaseId: Math.floor(Math.random() * 100000),
+          PatientId: newPat.PatientId,
+          DiseaseId: fd.diseaseId,
+          Note: fd.note
+        })
+      })
+
       return newPat
     })
   },
-  async updatePatient(id: number, patient: Patient): Promise<Patient> {
-    return apiPut<Patient, Patient>(`/patients/${id}`, patient, () => {
+  async updatePatient(
+    id: number,
+    patient: Patient,
+    allergies: { isIngredient: boolean; targetId: number; severity: string; note: string }[] = [],
+    diseases: { diseaseId: number; note: string }[] = []
+  ): Promise<Patient> {
+    const payload = {
+      ...patient,
+      Allergies: allergies,
+      Diseases: diseases
+    }
+    return apiPut<Patient, typeof payload>(`/patients/${id}`, payload, () => {
       const idx = localMocks.patients.findIndex(p => p.PatientId == id)
       if (idx >= 0) localMocks.patients[idx] = patient
+
+      // Sync mock allergies
+      localMocks.patientAllergies = localMocks.patientAllergies.filter(pa => pa.PatientId !== id)
+      allergies.forEach(fa => {
+        localMocks.patientAllergies.push({
+          AllergyId: Math.floor(Math.random() * 100000),
+          PatientId: id,
+          IngredientId: fa.isIngredient ? fa.targetId : null,
+          MedicineId: !fa.isIngredient ? fa.targetId : null,
+          AllergyNote: fa.note,
+          Severity: fa.severity
+        })
+      })
+
+      // Sync mock diseases
+      localMocks.patientDiseases = localMocks.patientDiseases.filter(pd => pd.PatientId !== id)
+      diseases.forEach(fd => {
+        localMocks.patientDiseases.push({
+          PatientDiseaseId: Math.floor(Math.random() * 100000),
+          PatientId: id,
+          DiseaseId: fd.diseaseId,
+          Note: fd.note
+        })
+      })
+
       return patient
     })
   },
@@ -194,6 +263,8 @@ export const ApiService = {
       const idx = localMocks.patients.findIndex(p => p.PatientId == id)
       if (idx >= 0) {
         localMocks.patients.splice(idx, 1)
+        localMocks.patientAllergies = localMocks.patientAllergies.filter(pa => pa.PatientId !== id)
+        localMocks.patientDiseases = localMocks.patientDiseases.filter(pd => pd.PatientId !== id)
         return true
       }
       return false

@@ -48,28 +48,105 @@ app.UseHttpsRedirection();
 app.MapGet("/api/patients", async (PharmacySafetyContext context) =>
     await context.Patients.ToListAsync());
 
-app.MapPost("/api/patients", async (Patient patient, PharmacySafetyContext context) =>
+app.MapPost("/api/patients", async (SavePatientRequest request, PharmacySafetyContext context) =>
 {
-    patient.CreatedAt = DateTime.Now;
+    var patient = new Patient
+    {
+        FullName = request.FullName,
+        Phone = request.Phone,
+        Gender = request.Gender,
+        DateOfBirth = request.DateOfBirth,
+        WeightKg = request.WeightKg,
+        Address = request.Address,
+        IsPregnant = request.IsPregnant,
+        IsBreastfeeding = request.IsBreastfeeding,
+        Note = request.Note,
+        CreatedAt = DateTime.Now
+    };
+
     context.Patients.Add(patient);
+    await context.SaveChangesAsync();
+
+    if (request.Allergies != null)
+    {
+        foreach (var allergy in request.Allergies)
+        {
+            context.PatientAllergies.Add(new PatientAllergy
+            {
+                PatientId = patient.PatientId,
+                IngredientId = allergy.IsIngredient ? allergy.TargetId : null,
+                MedicineId = !allergy.IsIngredient ? allergy.TargetId : null,
+                AllergyNote = allergy.Note,
+                Severity = allergy.Severity
+            });
+        }
+    }
+
+    if (request.Diseases != null)
+    {
+        foreach (var disease in request.Diseases)
+        {
+            context.PatientDiseases.Add(new PatientDisease
+            {
+                PatientId = patient.PatientId,
+                DiseaseId = disease.DiseaseId,
+                Note = disease.Note
+            });
+        }
+    }
+
     await context.SaveChangesAsync();
     return Results.Created($"/api/patients/{patient.PatientId}", patient);
 });
 
-app.MapPut("/api/patients/{id:int}", async (int id, Patient updatedPatient, PharmacySafetyContext context) =>
+app.MapPut("/api/patients/{id:int}", async (int id, SavePatientRequest request, PharmacySafetyContext context) =>
 {
     var patient = await context.Patients.FindAsync(id);
     if (patient == null) return Results.NotFound();
 
-    patient.FullName = updatedPatient.FullName;
-    patient.Phone = updatedPatient.Phone;
-    patient.Gender = updatedPatient.Gender;
-    patient.DateOfBirth = updatedPatient.DateOfBirth;
-    patient.WeightKg = updatedPatient.WeightKg;
-    patient.Address = updatedPatient.Address;
-    patient.IsPregnant = updatedPatient.IsPregnant;
-    patient.IsBreastfeeding = updatedPatient.IsBreastfeeding;
-    patient.Note = updatedPatient.Note;
+    patient.FullName = request.FullName;
+    patient.Phone = request.Phone;
+    patient.Gender = request.Gender;
+    patient.DateOfBirth = request.DateOfBirth;
+    patient.WeightKg = request.WeightKg;
+    patient.Address = request.Address;
+    patient.IsPregnant = request.IsPregnant;
+    patient.IsBreastfeeding = request.IsBreastfeeding;
+    patient.Note = request.Note;
+
+    var oldAllergies = await context.PatientAllergies.Where(pa => pa.PatientId == id).ToListAsync();
+    context.PatientAllergies.RemoveRange(oldAllergies);
+
+    if (request.Allergies != null)
+    {
+        foreach (var allergy in request.Allergies)
+        {
+            context.PatientAllergies.Add(new PatientAllergy
+            {
+                PatientId = id,
+                IngredientId = allergy.IsIngredient ? allergy.TargetId : null,
+                MedicineId = !allergy.IsIngredient ? allergy.TargetId : null,
+                AllergyNote = allergy.Note,
+                Severity = allergy.Severity
+            });
+        }
+    }
+
+    var oldDiseases = await context.PatientDiseases.Where(pd => pd.PatientId == id).ToListAsync();
+    context.PatientDiseases.RemoveRange(oldDiseases);
+
+    if (request.Diseases != null)
+    {
+        foreach (var disease in request.Diseases)
+        {
+            context.PatientDiseases.Add(new PatientDisease
+            {
+                PatientId = id,
+                DiseaseId = disease.DiseaseId,
+                Note = disease.Note
+            });
+        }
+    }
 
     await context.SaveChangesAsync();
     return Results.Ok(patient);
@@ -79,6 +156,32 @@ app.MapDelete("/api/patients/{id:int}", async (int id, PharmacySafetyContext con
 {
     var patient = await context.Patients.FindAsync(id);
     if (patient == null) return Results.NotFound();
+
+    var allergies = await context.PatientAllergies.Where(pa => pa.PatientId == id).ToListAsync();
+    context.PatientAllergies.RemoveRange(allergies);
+
+    var diseases = await context.PatientDiseases.Where(pd => pd.PatientId == id).ToListAsync();
+    context.PatientDiseases.RemoveRange(diseases);
+
+    var currentMeds = await context.PatientCurrentMedicines.Where(cm => cm.PatientId == id).ToListAsync();
+    context.PatientCurrentMedicines.RemoveRange(currentMeds);
+
+    var warnings = await context.Warnings.Where(w => w.PatientId == id).ToListAsync();
+    context.Warnings.RemoveRange(warnings);
+
+    var sales = await context.Sales.Where(s => s.PatientId == id).ToListAsync();
+    foreach (var sale in sales)
+    {
+        var details = await context.SaleDetails.Where(sd => sd.SaleId == sale.SaleId).ToListAsync();
+        context.SaleDetails.RemoveRange(details);
+
+        var checks = await context.SafetyChecks.Where(sc => sc.SaleId == sale.SaleId).ToListAsync();
+        context.SafetyChecks.RemoveRange(checks);
+    }
+    context.Sales.RemoveRange(sales);
+
+    var prescriptions = await context.Prescriptions.Where(p => p.PatientId == id).ToListAsync();
+    context.Prescriptions.RemoveRange(prescriptions);
 
     context.Patients.Remove(patient);
     await context.SaveChangesAsync();
@@ -607,4 +710,33 @@ public class WarningDto
     public int? AcknowledgedBy { get; set; }
     public string? AcknowledgedAt { get; set; }
     public string? Decision { get; set; }
+}
+
+public class SavePatientRequest
+{
+    public string FullName { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+    public string? Gender { get; set; }
+    public DateTime? DateOfBirth { get; set; }
+    public decimal? WeightKg { get; set; }
+    public string? Address { get; set; }
+    public bool IsPregnant { get; set; }
+    public bool IsBreastfeeding { get; set; }
+    public string? Note { get; set; }
+    public List<PatientAllergySaveDto> Allergies { get; set; } = new();
+    public List<PatientDiseaseSaveDto> Diseases { get; set; } = new();
+}
+
+public class PatientAllergySaveDto
+{
+    public bool IsIngredient { get; set; }
+    public int TargetId { get; set; }
+    public string Severity { get; set; } = "Nghiêm trọng";
+    public string Note { get; set; } = string.Empty;
+}
+
+public class PatientDiseaseSaveDto
+{
+    public int DiseaseId { get; set; }
+    public string Note { get; set; } = string.Empty;
 }

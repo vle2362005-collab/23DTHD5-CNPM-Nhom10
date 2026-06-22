@@ -397,10 +397,10 @@ export function usePharmacyStore() {
       Gender: patientData.Gender || null,
       Address: patientData.Address || null,
       Note: patientData.Note || null
-    })
+    }, allergies, diseasesList)
     patients.value.push(newPat)
 
-    // Clear and append allergies
+    // Clear and append allergies locally for immediate reactivity
     patientAllergies.value = patientAllergies.value.filter(pa => pa.PatientId !== newPat.PatientId)
     allergies.forEach(fa => {
       patientAllergies.value.push({
@@ -413,7 +413,7 @@ export function usePharmacyStore() {
       })
     })
 
-    // Clear and append diseases
+    // Clear and append diseases locally for immediate reactivity
     patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== newPat.PatientId)
     diseasesList.forEach(fd => {
       patientDiseases.value.push({
@@ -439,12 +439,13 @@ export function usePharmacyStore() {
       Gender: patientData.Gender || null,
       Address: patientData.Address || null,
       Note: patientData.Note || null
-    })
+    }, allergies, diseasesList)
     const idx = patients.value.findIndex(p => p.PatientId === patientId)
     if (idx !== -1) {
       patients.value[idx] = updatedPat
     }
 
+    // Clear and append allergies locally for immediate reactivity
     patientAllergies.value = patientAllergies.value.filter(pa => pa.PatientId !== patientId)
     allergies.forEach(fa => {
       patientAllergies.value.push({
@@ -457,6 +458,7 @@ export function usePharmacyStore() {
       })
     })
 
+    // Clear and append diseases locally for immediate reactivity
     patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== patientId)
     diseasesList.forEach(fd => {
       patientDiseases.value.push({
