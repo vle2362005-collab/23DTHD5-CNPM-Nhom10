@@ -4,6 +4,9 @@ import { usePharmacyStore, type Contraindication } from '../store/pharmacy'
 
 const store = usePharmacyStore()
 
+// Sub-tabs state
+const activeSubTab = ref<'contraindications' | 'interactions' | 'allergies' | 'diseases'>('contraindications')
+
 // Check permissions
 const canManage = computed(() => {
   return store.currentRole.value === 'admin' || store.currentRole.value === 'manager'
@@ -12,6 +15,47 @@ const canManage = computed(() => {
 // Search & Filter State
 const contraSearchQuery = ref('')
 const severityFilter = ref('all')
+
+// Allergies Tab Search
+const allergySearchQuery = ref('')
+const filteredAllergies = computed(() => {
+  return store.patientAllergies.value.filter(pa => {
+    const p = store.patients.value.find(pat => pat.PatientId === pa.PatientId)
+    const patientName = p ? p.FullName.toLowerCase() : ''
+    const patientPhone = p?.Phone || ''
+    
+    let targetName = ''
+    if (pa.IngredientId) {
+      const ing = store.activeIngredients.value.find(i => i.IngredientId === pa.IngredientId)
+      targetName = ing ? ing.IngredientName.toLowerCase() : ''
+    } else if (pa.MedicineId) {
+      const med = store.medicines.value.find(m => m.MedicineId === pa.MedicineId)
+      targetName = med ? med.MedicineName.toLowerCase() : ''
+    }
+    
+    const query = allergySearchQuery.value.toLowerCase().trim()
+    if (!query) return true
+    
+    return patientName.includes(query) || patientPhone.includes(query) || targetName.includes(query) || (pa.AllergyNote || '').toLowerCase().includes(query)
+  })
+})
+
+// Diseases Tab Search
+const diseaseSearchQuery = ref('')
+const filteredDiseases = computed(() => {
+  return store.diseases.value.filter(d => {
+    const name = d.DiseaseName.toLowerCase()
+    const desc = (d.Description || '').toLowerCase()
+    const query = diseaseSearchQuery.value.toLowerCase().trim()
+    if (!query) return true
+    return name.includes(query) || desc.includes(query)
+  })
+})
+
+// Count patients with a specific disease
+const getDiseasePatientsCount = (diseaseId: number) => {
+  return store.patientDiseases.value.filter(pd => pd.DiseaseId === diseaseId).length
+}
 
 // Modal Form State
 const showContraModal = ref(false)
@@ -183,37 +227,38 @@ const deleteContra = async (contra: Contraindication) => {
 
 <template>
   <div class="view-container">
-    <!-- Drug Interactions (Tương tác thuốc) -->
-    <div class="grid-card text-section" style="margin-bottom: 24px;">
-      <h3 class="section-title">Danh mục Tương tác Hoạt chất chéo (Drug Interactions)</h3>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Hoạt chất A</th>
-            <th>Hoạt chất B</th>
-            <th>Mức độ</th>
-            <th>Mô tả tương tác hại</th>
-            <th>Khuyến cáo lâm sàng (Recommendation)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="di in store.drugInteractions.value" :key="di.InteractionId">
-            <td><strong>{{ store.activeIngredients.value.find(ai => ai.IngredientId === di.IngredientAId)?.IngredientName }}</strong></td>
-            <td><strong>{{ store.activeIngredients.value.find(ai => ai.IngredientId === di.IngredientBId)?.IngredientName }}</strong></td>
-            <td>
-              <span :class="['status-tag', di.Severity === 'Nghiêm trọng' || di.Severity === 'High' ? 'danger' : 'warning']">
-                {{ di.Severity }}
-              </span>
-            </td>
-            <td><small>{{ di.Description }}</small></td>
-            <td><small class="green" style="color: var(--success); font-weight: 600;">{{ di.Recommendation }}</small></td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Sub-tabs Navigation -->
+    <div class="tabs-header-row">
+      <button 
+        :class="['tab-btn', { active: activeSubTab === 'contraindications' }]" 
+        @click="activeSubTab = 'contraindications'"
+      >
+        🚫 Chống chỉ định lâm sàng
+      </button>
+      <button 
+        :class="['tab-btn', { active: activeSubTab === 'interactions' }]" 
+        @click="activeSubTab = 'interactions'"
+      >
+        ⚡ Tương tác thuốc
+      </button>
+      <button 
+        :class="['tab-btn', { active: activeSubTab === 'allergies' }]" 
+        @click="activeSubTab = 'allergies'"
+      >
+        ⚠️ Dị ứng thuốc bệnh nhân
+      </button>
+      <button 
+        :class="['tab-btn', { active: activeSubTab === 'diseases' }]" 
+        @click="activeSubTab = 'diseases'"
+      >
+        🏥 Danh mục Bệnh nền
+      </button>
     </div>
 
-    <!-- Contraindications (Chống chỉ định) -->
-    <div class="grid-card text-section">
+    <!-- ==========================================
+      TAB 1: CONTRAINDICATIONS
+    ========================================== -->
+    <div v-if="activeSubTab === 'contraindications'" class="grid-card text-section">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3 class="section-title" style="margin-bottom: 0;">Danh mục Chống chỉ định lâm sàng (Contraindications)</h3>
         <button class="primary-btn flex-center" v-if="canManage" @click="openAddContra">
@@ -310,6 +355,166 @@ const deleteContra = async (contra: Contraindication) => {
           <span class="empty-icon">⚠️</span>
           <h4>Không tìm thấy chống chỉ định phù hợp</h4>
           <p>Hãy thử thay đổi từ khóa tìm kiếm hoặc bộ lọc.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      TAB 2: DRUG INTERACTIONS
+    ========================================== -->
+    <div v-if="activeSubTab === 'interactions'" class="grid-card text-section">
+      <h3 class="section-title">Danh mục Tương tác Hoạt chất chéo (Drug Interactions)</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Hoạt chất A</th>
+            <th>Hoạt chất B</th>
+            <th>Mức độ</th>
+            <th>Mô tả tương tác hại</th>
+            <th>Khuyến cáo lâm sàng (Recommendation)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="di in store.drugInteractions.value" :key="di.InteractionId">
+            <td><strong>{{ store.activeIngredients.value.find(ai => ai.IngredientId === di.IngredientAId)?.IngredientName }}</strong></td>
+            <td><strong>{{ store.activeIngredients.value.find(ai => ai.IngredientId === di.IngredientBId)?.IngredientName }}</strong></td>
+            <td>
+              <span :class="['status-tag', di.Severity === 'Nghiêm trọng' || di.Severity === 'High' ? 'danger' : 'warning']">
+                {{ di.Severity }}
+              </span>
+            </td>
+            <td><small>{{ di.Description }}</small></td>
+            <td><small class="green" style="color: var(--success); font-weight: 600;">{{ di.Recommendation }}</small></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ==========================================
+      TAB 3: PATIENT ALLERGIES
+    ========================================== -->
+    <div v-if="activeSubTab === 'allergies'" class="grid-card text-section">
+      <h3 class="section-title" style="margin-bottom: 20px;">Danh sách Dị ứng thuốc của bệnh nhân</h3>
+      
+      <!-- Search Panel -->
+      <div class="filters-row-contra" style="margin-bottom: 16px;">
+        <div class="filter-col-contra flex-1">
+          <label class="filter-label">Tìm kiếm dị ứng:</label>
+          <div class="search-input-wrapper">
+            <input 
+              type="text" 
+              placeholder="Nhập tên bệnh nhân, số điện thoại, tên thuốc hoặc hoạt chất..." 
+              class="form-control"
+              v-model="allergySearchQuery" 
+            />
+            <svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <table class="data-table" v-if="filteredAllergies.length > 0">
+        <thead>
+          <tr>
+            <th>Bệnh nhân</th>
+            <th>Loại dị ứng</th>
+            <th>Tác nhân gây dị ứng</th>
+            <th>Mức độ</th>
+            <th>Ghi chú lâm sàng (Triệu chứng)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="pa in filteredAllergies" :key="pa.AllergyId">
+            <td>
+              <div style="display: flex; flex-direction: column;">
+                <strong>{{ store.patients.value.find(p => p.PatientId === pa.PatientId)?.FullName || 'Không rõ' }}</strong>
+                <small class="text-muted">{{ store.patients.value.find(p => p.PatientId === pa.PatientId)?.Phone }}</small>
+              </div>
+            </td>
+            <td>
+              <span :class="['ing-tag-mini', pa.IngredientId ? 'ingredient' : 'medicine']" :style="pa.IngredientId ? 'background-color: var(--primary-bg); color: var(--primary-medium); border: 1px solid rgba(16, 185, 129, 0.15)' : 'background-color: rgba(59, 130, 246, 0.1); color: var(--info); border: 1px solid rgba(59, 130, 246, 0.15)'">
+                {{ pa.IngredientId ? 'Hoạt chất' : 'Biệt dược' }}
+              </span>
+            </td>
+            <td>
+              <strong>
+                {{ pa.IngredientId 
+                  ? store.activeIngredients.value.find(i => i.IngredientId === pa.IngredientId)?.IngredientName 
+                  : store.medicines.value.find(m => m.MedicineId === pa.MedicineId)?.MedicineName || 'Tác nhân khác' }}
+              </strong>
+            </td>
+            <td>
+              <span :class="['status-tag', pa.Severity === 'Nghiêm trọng' || pa.Severity === 'High' ? 'danger' : pa.Severity === 'Trung bình' || pa.Severity === 'Medium' ? 'warning' : 'safe']">
+                {{ pa.Severity || 'Nghiêm trọng' }}
+              </span>
+            </td>
+            <td><small>{{ pa.AllergyNote || '-' }}</small></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Empty state -->
+      <div class="empty-state-container flex-center" v-else>
+        <div class="empty-content">
+          <span class="empty-icon">⚠️</span>
+          <h4>Không tìm thấy lịch sử dị ứng phù hợp</h4>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      TAB 4: DISEASES CATALOG
+    ========================================== -->
+    <div v-if="activeSubTab === 'diseases'" class="grid-card text-section">
+      <h3 class="section-title" style="margin-bottom: 20px;">Danh mục Bệnh lý nền mãn tính (Diseases Catalog)</h3>
+      
+      <!-- Search Panel -->
+      <div class="filters-row-contra" style="margin-bottom: 16px;">
+        <div class="filter-col-contra flex-1">
+          <label class="filter-label">Tìm kiếm bệnh lý:</label>
+          <div class="search-input-wrapper">
+            <input 
+              type="text" 
+              placeholder="Nhập tên bệnh hoặc mô tả..." 
+              class="form-control"
+              v-model="diseaseSearchQuery" 
+            />
+            <svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <table class="data-table" v-if="filteredDiseases.length > 0">
+        <thead>
+          <tr>
+            <th style="width: 250px;">Tên bệnh nền</th>
+            <th>Mô tả chuyên khoa</th>
+            <th style="text-align: center; width: 180px;">Số bệnh nhân đang mắc</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="d in filteredDiseases" :key="d.DiseaseId">
+            <td><strong>{{ d.DiseaseName }}</strong></td>
+            <td><small>{{ d.Description || '-' }}</small></td>
+            <td style="text-align: center;">
+              <span class="status-tag info" style="font-weight: 700; padding: 4px 10px;">
+                {{ getDiseasePatientsCount(d.DiseaseId) }} bệnh nhân
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Empty state -->
+      <div class="empty-state-container flex-center" v-else>
+        <div class="empty-content">
+          <span class="empty-icon">⚠️</span>
+          <h4>Không tìm thấy bệnh lý nền nào phù hợp</h4>
         </div>
       </div>
     </div>
@@ -582,5 +787,34 @@ const deleteContra = async (contra: Contraindication) => {
 }
 .textarea-control {
   resize: vertical;
+}
+
+/* Tabs navigation styles */
+.tabs-header-row {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 20px;
+}
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab-btn:hover {
+  color: var(--text-main);
+}
+.tab-btn.active {
+  color: var(--primary-medium);
+  border-bottom-color: var(--primary-medium);
 }
 </style>
