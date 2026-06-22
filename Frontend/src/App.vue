@@ -968,10 +968,24 @@ input:checked + .slider:before {
   transition: opacity var(--transition-fast);
 }
 
+/* Safety Warning Card themes based on severity */
+.safety-warning-card.severity-high {
+  border-color: rgba(239, 68, 68, 0.2);
+  background-color: var(--danger-bg);
+}
+.safety-warning-card.severity-medium {
+  border-color: rgba(245, 158, 11, 0.2);
+  background-color: var(--warning-bg);
+}
+.safety-warning-card.severity-low {
+  border-color: rgba(59, 130, 246, 0.2);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
 .safety-warning-card.acknowledged {
   opacity: 0.65;
-  border-color: var(--border-color);
-  background-color: var(--bg-main);
+  border-color: var(--border-color) !important;
+  background-color: var(--bg-main) !important;
 }
 
 .warning-card-head {
@@ -990,19 +1004,40 @@ input:checked + .slider:before {
   border-radius: var(--border-radius-sm);
 }
 
-.acknowledged .warning-tag {
-  color: var(--text-muted);
-  background-color: #e2e8f0;
+.severity-medium .warning-tag {
+  color: var(--warning);
+  background-color: rgba(245, 158, 11, 0.08);
+}
+.severity-low .warning-tag {
+  color: var(--info);
+  background-color: rgba(59, 130, 246, 0.08);
 }
 
-.severity-badge-high {
+.acknowledged .warning-tag {
+  color: var(--text-muted) !important;
+  background-color: #e2e8f0 !important;
+}
+
+.severity-badge {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  background-color: var(--danger);
   color: white;
   padding: 2px 6px;
   border-radius: 4px;
+}
+.severity-badge.severity-high {
+  background-color: var(--danger);
+}
+.severity-badge.severity-medium {
+  background-color: var(--warning);
+}
+.severity-badge.severity-low {
+  background-color: var(--info);
+}
+
+.acknowledged .severity-badge {
+  background-color: var(--text-muted) !important;
 }
 
 .warning-msg {
@@ -1020,10 +1055,24 @@ input:checked + .slider:before {
   font-size: 13px;
 }
 
+.severity-medium .recommendation-box {
+  border-color: rgba(245, 158, 11, 0.1);
+}
+.severity-low .recommendation-box {
+  border-color: rgba(59, 130, 246, 0.1);
+}
+
 .recommendation-box strong {
   color: #b91c1c;
   display: block;
   margin-bottom: 4px;
+}
+
+.severity-medium .recommendation-box strong {
+  color: #d97706;
+}
+.severity-low .recommendation-box strong {
+  color: #2563eb;
 }
 
 .resolution-row {

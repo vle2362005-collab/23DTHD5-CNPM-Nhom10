@@ -200,6 +200,12 @@ const simulateOCRScan = () => {
     alert('✓ Đã quét đơn thuốc mẫu thành công! Hệ thống tự động thêm 2 loại thuốc vào giỏ hàng và thiết lập liều dùng.')
   }, 1500)
 }
+
+const getSeverityClass = (severity: string) => {
+  if (severity === 'Nghiêm trọng' || severity === 'High') return 'severity-high'
+  if (severity === 'Trung bình' || severity === 'Medium') return 'severity-medium'
+  return 'severity-low'
+}
 </script>
 
 <template>
@@ -474,10 +480,10 @@ const simulateOCRScan = () => {
               <p class="warning-alert-count">⚠️ Phát hiện <strong>{{ store.safetyWarnings.value.length }}</strong> rủi ro lâm sàng cần giải quyết:</p>
               
               <div class="warnings-scroll-list">
-                <div v-for="w in store.safetyWarnings.value" :key="w.WarningId" :class="['safety-warning-card', { 'acknowledged': w.IsAcknowledged }]">
+                <div v-for="w in store.safetyWarnings.value" :key="w.WarningId" :class="['safety-warning-card', getSeverityClass(w.Severity), { 'acknowledged': w.IsAcknowledged }]">
                   <div class="warning-card-head">
                     <span class="warning-tag">{{ w.WarningType }}</span>
-                    <span class="severity-badge-high">{{ w.Severity }}</span>
+                    <span :class="['severity-badge', getSeverityClass(w.Severity)]">{{ w.Severity }}</span>
                   </div>
                   <p class="warning-msg">{{ w.Message }}</p>
                   
