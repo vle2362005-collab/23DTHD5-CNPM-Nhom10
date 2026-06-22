@@ -550,6 +550,29 @@ export function usePharmacyStore() {
     medicineIngredients.value = medicineIngredients.value.filter(mi => mi.MedicineId !== medicineId)
   }
 
+  const addUser = async (userData: Omit<User, 'UserId' | 'CreatedAt'>) => {
+    const newUser = await ApiService.createUser(userData)
+    users.value.push(newUser)
+    return newUser
+  }
+
+  const updateUserStore = async (userId: number, userData: User) => {
+    const updatedUser = await ApiService.updateUser(userId, userData)
+    const idx = users.value.findIndex(u => u.UserId === userId)
+    if (idx !== -1) {
+      users.value[idx] = updatedUser
+    }
+    return updatedUser
+  }
+
+  const deleteUserStore = async (userId: number) => {
+    const success = await ApiService.deleteUser(userId)
+    if (success) {
+      users.value = users.value.filter(u => u.UserId !== userId)
+    }
+    return success
+  }
+
   const hasInitialized = ref(false)
 
   const initializeStore = async () => {
@@ -728,6 +751,9 @@ export function usePharmacyStore() {
     addMedicine,
     updateMedicine,
     deleteMedicine,
+    addUser,
+    updateUserStore,
+    deleteUserStore,
     initializeStore
   }
 }

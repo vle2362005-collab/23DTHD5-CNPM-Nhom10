@@ -272,6 +272,35 @@ export const ApiService = {
   async getUsers(): Promise<User[]> {
     return apiGet<User[]>('/users', localMocks.users)
   },
+  async createUser(user: Omit<User, 'UserId' | 'CreatedAt'>): Promise<User> {
+    return apiPost<User, Omit<User, 'UserId' | 'CreatedAt'>>('/users', user, () => {
+      const newId = localMocks.users.length > 0 ? Math.max(...localMocks.users.map(u => u.UserId)) + 1 : 1
+      const newUser: User = {
+        ...user,
+        UserId: newId,
+        CreatedAt: new Date().toISOString().substring(0, 10)
+      }
+      localMocks.users.push(newUser)
+      return newUser
+    })
+  },
+  async updateUser(id: number, user: User): Promise<User> {
+    return apiPut<User, User>(`/users/${id}`, user, () => {
+      const idx = localMocks.users.findIndex(u => u.UserId === id)
+      if (idx >= 0) localMocks.users[idx] = user
+      return user
+    })
+  },
+  async deleteUser(id: number): Promise<boolean> {
+    return apiDelete(`/users/${id}`, () => {
+      const idx = localMocks.users.findIndex(u => u.UserId === id)
+      if (idx >= 0) {
+        localMocks.users.splice(idx, 1)
+        return true
+      }
+      return false
+    })
+  },
   async getDrugGroups(): Promise<DrugGroup[]> {
     return apiGet<DrugGroup[]>('/druggroups', localMocks.drugGroups)
   },
