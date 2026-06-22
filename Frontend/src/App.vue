@@ -51,7 +51,10 @@ const handleTabChange = (tabId: string) => {
 </script>
 
 <template>
-  <div class="app-layout">
+  <div v-if="activeTab === 'login'" class="login-layout">
+    <router-view />
+  </div>
+  <div v-else class="app-layout">
     <!-- Left Sidebar component -->
     <Sidebar 
       :is-collapsed="isCollapsed" 
@@ -117,6 +120,12 @@ const handleTabChange = (tabId: string) => {
 </template>
 
 <style>
+.login-layout {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
 .app-layout {
   display: flex;
   width: 100vw;

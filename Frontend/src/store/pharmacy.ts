@@ -171,10 +171,30 @@ const saleDetails = ref<SaleDetail[]>([])
 const warnings = ref<Warning[]>([])
 
 // ==========================================
-// 3. CART & SAFELY ENGINE INTERACTIVE STATE
+// 3. CART & SAFELY ENGINE INTERACTIVE STATE & AUTH
 // ==========================================
 
-const currentRole = ref<'admin' | 'pharmacist' | 'manager'>('pharmacist')
+const getStoredUser = (): User | null => {
+  try {
+    const data = localStorage.getItem('safepharm_user')
+    return data ? JSON.parse(data) : null
+  } catch {
+    return null
+  }
+}
+
+const getStoredRole = (): 'admin' | 'pharmacist' | 'manager' => {
+  const role = localStorage.getItem('safepharm_role')
+  if (role === 'admin' || role === 'pharmacist' || role === 'manager') {
+    return role
+  }
+  return 'pharmacist'
+}
+
+const isAuthenticated = ref<boolean>(localStorage.getItem('safepharm_auth') === 'true')
+const currentUser = ref<User | null>(getStoredUser())
+const currentRole = ref<'admin' | 'pharmacist' | 'manager'>(getStoredRole())
+
 const selectedPatientId = ref<number>(1)
 const selectedMedicineId = ref<number>(1)
 const qtyToAdd = ref<number>(10)
@@ -554,6 +574,45 @@ export function usePharmacyStore() {
     }
   }
 
+  const login = async (email: string, phone: string): Promise<boolean> => {
+    // If not initialized, load users
+    if (users.value.length === 0) {
+      await initializeStore()
+    }
+    
+    // Find matching user (case-insensitive for email, matching phone or PIN '123456' for test convenience)
+    const foundUser = users.value.find(u => 
+      u.Email.toLowerCase() === email.trim().toLowerCase() && 
+      (u.Phone === phone.trim() || phone.trim() === '123456')
+    )
+    
+    if (foundUser && foundUser.Status === 'Active') {
+      let roleKey: 'admin' | 'pharmacist' | 'manager' = 'pharmacist'
+      if (foundUser.RoleId === 1) roleKey = 'admin'
+      else if (foundUser.RoleId === 3) roleKey = 'manager'
+      
+      isAuthenticated.value = true
+      currentUser.value = foundUser
+      currentRole.value = roleKey
+      
+      localStorage.setItem('safepharm_auth', 'true')
+      localStorage.setItem('safepharm_user', JSON.stringify(foundUser))
+      localStorage.setItem('safepharm_role', roleKey)
+      return true
+    }
+    return false
+  }
+
+  const logout = () => {
+    isAuthenticated.value = false
+    currentUser.value = null
+    currentRole.value = 'pharmacist'
+    
+    localStorage.removeItem('safepharm_auth')
+    localStorage.removeItem('safepharm_user')
+    localStorage.removeItem('safepharm_role')
+  }
+
   // Trigger init immediately on startup
   initializeStore()
 
@@ -573,6 +632,10 @@ export function usePharmacyStore() {
     sales,
     saleDetails,
     warnings,
+
+    // Auth states
+    isAuthenticated,
+    currentUser,
 
     // Form builder states
     currentRole,
@@ -600,6 +663,8 @@ export function usePharmacyStore() {
     cartTotalAmount,
 
     // Methods
+    login,
+    logout,
     addMedicineToCart,
     removeFromCart,
     runSafetyCheck,

@@ -9,8 +9,9 @@ const BASE_URL = 'http://localhost:5097/api'
 // Local mock databases for Fallback (Offline Mode)
 const localMocks = {
   users: [
-    { UserId: 1, RoleId: 1, FullName: 'Admin He Thong', Email: 'admin@gmail.com', Phone: '0900000000', Status: 'Active', CreatedAt: '2026-01-10' },
-    { UserId: 2, RoleId: 2, FullName: 'Duoc Si A', Email: 'duocsi@gmail.com', Phone: '0911111111', Status: 'Active', CreatedAt: '2026-01-15' }
+    { UserId: 1, RoleId: 1, FullName: 'Nguyễn Minh Quân', Email: 'admin@gmail.com', Phone: '0900000000', Status: 'Active', CreatedAt: '2026-01-10' },
+    { UserId: 2, RoleId: 2, FullName: 'Ds. Trần Thị Mai', Email: 'duocsi@gmail.com', Phone: '0911111111', Status: 'Active', CreatedAt: '2026-01-15' },
+    { UserId: 3, RoleId: 3, FullName: 'Ds. Phạm Thanh Sơn', Email: 'quanly@gmail.com', Phone: '0922222222', Status: 'Active', CreatedAt: '2026-01-20' }
   ] as User[],
 
   patients: [

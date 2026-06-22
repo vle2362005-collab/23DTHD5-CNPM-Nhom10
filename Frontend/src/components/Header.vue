@@ -1,5 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { usePharmacyStore } from '../store/pharmacy'
+
+const router = useRouter()
+const store = usePharmacyStore()
+
+const handleLogout = () => {
+  store.logout()
+  router.push({ name: 'login' })
+}
 
 // Props definitions
 interface Props {
@@ -230,6 +240,16 @@ const clearNotifications = () => {
                 </button>
               </li>
             </ul>
+            <div class="dropdown-footer">
+              <button class="logout-btn" @click="handleLogout">
+                <svg viewBox="0 0 24 24" class="logout-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                <span>Đăng xuất tài khoản</span>
+              </button>
+            </div>
           </div>
         </Transition>
       </div>
@@ -725,5 +745,37 @@ const clearNotifications = () => {
   .search-bar {
     display: none;
   }
+}
+
+.dropdown-footer {
+  padding: 8px 12px;
+  background-color: var(--bg-main);
+  border-top: 1px solid var(--border-color);
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-sm);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.logout-btn:hover {
+  background-color: var(--danger-bg);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.logout-icon {
+  width: 16px;
+  height: 16px;
 }
 </style>
