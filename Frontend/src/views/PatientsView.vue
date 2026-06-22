@@ -34,6 +34,18 @@ const canManage = computed(() => {
   return store.currentRole.value === 'admin' || store.currentRole.value === 'manager'
 })
 
+// Stats computations for cards
+const totalPatients = computed(() => store.patients.value.length)
+const specialConditionsCount = computed(() => store.patients.value.filter(p => p.IsPregnant || p.IsBreastfeeding).length)
+const allergiesCount = computed(() => {
+  const uniqueIds = new Set(store.patientAllergies.value.map(a => a.PatientId))
+  return uniqueIds.size
+})
+const diseasesCount = computed(() => {
+  const uniqueIds = new Set(store.patientDiseases.value.map(d => d.PatientId))
+  return uniqueIds.size
+})
+
 // Age calculation helper
 const calculateAge = (dobString: string) => {
   if (!dobString) return 0
@@ -309,6 +321,38 @@ const deletePatient = async (patient: Patient) => {
 
 <template>
   <div class="view-container">
+    <!-- Stats Cards Row -->
+    <div class="stats-cards-row">
+      <div class="stat-card total-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-info">
+          <span class="stat-label">Tổng số bệnh nhân</span>
+          <span class="stat-number">{{ totalPatients }}</span>
+        </div>
+      </div>
+      <div class="stat-card special-card">
+        <div class="stat-icon">🤰</div>
+        <div class="stat-info">
+          <span class="stat-label">Đối tượng đặc biệt</span>
+          <span class="stat-number">{{ specialConditionsCount }}</span>
+        </div>
+      </div>
+      <div class="stat-card allergy-card">
+        <div class="stat-icon">⚠️</div>
+        <div class="stat-info">
+          <span class="stat-label">Bệnh nhân dị ứng</span>
+          <span class="stat-number">{{ allergiesCount }}</span>
+        </div>
+      </div>
+      <div class="stat-card disease-card">
+        <div class="stat-icon">🏥</div>
+        <div class="stat-info">
+          <span class="stat-label">Có bệnh lý nền</span>
+          <span class="stat-number">{{ diseasesCount }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Filter & Search Panel -->
     <div class="grid-card search-filter-panel">
       <div class="filters-row">
@@ -390,44 +434,55 @@ const deletePatient = async (patient: Patient) => {
               </div>
             </td>
             <td>{{ p.DateOfBirth }} <small>({{ calculateAge(p.DateOfBirth) }}t)</small></td>
-            <td>{{ p.Gender }}</td>
-            <td><strong class="weight-text">{{ p.WeightKg ? p.WeightKg + ' kg' : '-' }}</strong></td>
-            <td>
-              <div class="special-badges-list">
-                <span v-if="p.IsPregnant" class="status-tag danger">🤰 Mang thai</span>
-                <span v-if="p.IsBreastfeeding" class="status-tag warning">🍼 Con bú</span>
-                <span v-if="!p.IsPregnant && !p.IsBreastfeeding" class="light-tag">Bình thường</span>
-              </div>
-            </td>
-            <td>
-              <div class="allergies-preview-list" v-if="getPatientAllergiesList(p.PatientId).length > 0">
-                <span v-for="alg in getPatientAllergiesList(p.PatientId)" :key="alg.id" :class="['alg-preview-tag', alg.severity === 'Nghiêm trọng' || alg.severity === 'High' ? 'high' : 'medium']" :title="alg.note || 'Không có ghi chú'">
-                  {{ alg.targetName }}
-                </span>
-              </div>
-              <span v-else class="empty-preview">-</span>
-            </td>
-            <td>
-              <div class="diseases-preview-list" v-if="getPatientDiseasesList(p.PatientId).length > 0">
-                <span v-for="dis in getPatientDiseasesList(p.PatientId)" :key="dis.id" class="dis-preview-tag" :title="dis.note || 'Không có ghi chú'">
-                  {{ dis.name }}
-                </span>
-              </div>
-              <span v-else class="empty-preview">-</span>
-            </td>
-            <td>
-              <div class="action-buttons-group">
-                <button class="action-btn-icon view" @click="openDetail(p)" title="Xem chi tiết bệnh án">
-                  👁️
-                </button>
-                <button class="action-btn-icon edit" v-if="canManage" @click="openEditForm(p)" title="Chỉnh sửa hồ sơ">
-                  ✏️
-                </button>
-                <button class="action-btn-icon delete" v-if="canManage" @click="deletePatient(p)" title="Xóa hồ sơ">
-                  🗑️
-                </button>
-              </div>
-            </td>
+             <td>
+              <span :class="['gender-tag', p.Gender === 'Nam' ? 'male' : 'female']">
+                {{ p.Gender === 'Nam' ? '👨 Nam' : '👩 Nữ' }}
+              </span>
+             </td>
+             <td><strong class="weight-text">{{ p.WeightKg ? p.WeightKg + ' kg' : '-' }}</strong></td>
+             <td>
+               <div class="special-badges-list">
+                 <span v-if="p.IsPregnant" class="status-tag danger">🤰 Mang thai</span>
+                 <span v-if="p.IsBreastfeeding" class="status-tag warning">🍼 Con bú</span>
+                 <span v-if="!p.IsPregnant && !p.IsBreastfeeding" class="light-tag">Bình thường</span>
+               </div>
+             </td>
+             <td>
+               <div class="allergies-preview-list" v-if="getPatientAllergiesList(p.PatientId).length > 0">
+                 <span v-for="alg in getPatientAllergiesList(p.PatientId)" :key="alg.id" :class="['alg-preview-tag', alg.severity === 'Nghiêm trọng' || alg.severity === 'High' ? 'high' : 'medium']" :title="alg.note || 'Không có ghi chú'">
+                   {{ alg.targetName }}
+                 </span>
+               </div>
+               <span v-else class="empty-preview">-</span>
+             </td>
+             <td>
+               <div class="diseases-preview-list" v-if="getPatientDiseasesList(p.PatientId).length > 0">
+                 <span v-for="dis in getPatientDiseasesList(p.PatientId)" :key="dis.id" class="dis-preview-tag" :title="dis.note || 'Không có ghi chú'">
+                   {{ dis.name }}
+                 </span>
+               </div>
+               <span v-else class="empty-preview">-</span>
+             </td>
+             <td>
+               <div class="action-buttons-group">
+                 <button class="action-btn-icon view" @click="openDetail(p)" title="Xem chi tiết bệnh án">
+                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                     <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                   </svg>
+                 </button>
+                 <button class="action-btn-icon edit" v-if="canManage" @click="openEditForm(p)" title="Chỉnh sửa hồ sơ">
+                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                   </svg>
+                 </button>
+                 <button class="action-btn-icon delete" v-if="canManage" @click="deletePatient(p)" title="Xóa hồ sơ">
+                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                   </svg>
+                 </button>
+               </div>
+             </td>
           </tr>
         </tbody>
       </table>
@@ -781,6 +836,95 @@ const deletePatient = async (patient: Patient) => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Stats Cards Row */
+.stats-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+.stat-card.total-card::before { background: var(--info); }
+.stat-card.special-card::before { background: var(--danger); }
+.stat-card.allergy-card::before { background: var(--warning); }
+.stat-card.disease-card::before { background: var(--primary-medium); }
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-light);
+}
+.stat-icon {
+  font-size: 26px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-main);
+  transition: transform var(--transition-normal);
+}
+.stat-card:hover .stat-icon {
+  transform: scale(1.1);
+}
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.stat-number {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1;
+}
+
+/* Gender tags styling */
+.gender-tag {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--border-radius-sm);
+  display: inline-block;
+  white-space: nowrap;
+}
+.gender-tag.male {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--info);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+.gender-tag.female {
+  background-color: rgba(244, 63, 94, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(244, 63, 94, 0.2);
 }
 
 /* Search and Filters panel styling */
