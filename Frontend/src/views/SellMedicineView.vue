@@ -23,7 +23,7 @@ const filteredPatientsList = computed(() => {
   const query = patientSearchText.value.toLowerCase().trim()
   if (!query) return store.patients.value
   return store.patients.value.filter(
-    p => p.FullName.toLowerCase().includes(query) || p.Phone.includes(query)
+    p => p.FullName.toLowerCase().includes(query) || (p.Phone && p.Phone.includes(query))
   )
 })
 
@@ -45,7 +45,7 @@ const filteredMedicinesList = computed(() => {
   const activeMeds = store.medicines.value.filter(m => m.IsActive)
   if (!query) return activeMeds
   return activeMeds.filter(
-    m => m.MedicineName.toLowerCase().includes(query) || m.Strength.toLowerCase().includes(query)
+    m => m.MedicineName.toLowerCase().includes(query) || (m.Strength && m.Strength.toLowerCase().includes(query))
   )
 })
 
@@ -229,7 +229,7 @@ const simulateOCRScan = () => {
             </div>
             <div class="detail-row">
               <span class="detail-label">Địa chỉ:</span>
-              <span class="detail-value text-ellipsis" :title="store.activePatient.value.Address">{{ store.activePatient.value.Address }}</span>
+              <span class="detail-value text-ellipsis" :title="store.activePatient.value.Address || undefined">{{ store.activePatient.value.Address }}</span>
             </div>
           </div>
 

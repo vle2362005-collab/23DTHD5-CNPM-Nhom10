@@ -66,8 +66,8 @@ const getPatientAllergiesList = (patientId: number) => {
         isIngredient: !!pa.IngredientId,
         targetId: pa.IngredientId || pa.MedicineId || 0,
         targetName,
-        severity: pa.Severity,
-        note: pa.AllergyNote
+        severity: pa.Severity || 'Nghiêm trọng',
+        note: pa.AllergyNote || ''
       }
     })
 }
@@ -82,7 +82,7 @@ const getPatientDiseasesList = (patientId: number) => {
         id: pd.PatientDiseaseId,
         diseaseId: pd.DiseaseId,
         name: dis ? dis.DiseaseName : 'Không rõ',
-        note: pd.Note
+        note: pd.Note || ''
       }
     })
 }
@@ -100,7 +100,7 @@ const filteredPatients = computed(() => {
     let matchesSearch = true
     if (query) {
       const nameMatch = p.FullName.toLowerCase().includes(query)
-      const phoneMatch = p.Phone.includes(query)
+      const phoneMatch = p.Phone ? p.Phone.includes(query) : false
       matchesSearch = nameMatch || phoneMatch
     }
 
@@ -159,29 +159,29 @@ const openEditForm = (patient: Patient) => {
   isEditing.value = true
   formPatientId.value = patient.PatientId
   formFullName.value = patient.FullName
-  formPhone.value = patient.Phone
-  formGender.value = patient.Gender
+  formPhone.value = patient.Phone || ''
+  formGender.value = patient.Gender || ''
   formDateOfBirth.value = patient.DateOfBirth
   formWeightKg.value = patient.WeightKg
-  formAddress.value = patient.Address
+  formAddress.value = patient.Address || ''
   formIsPregnant.value = patient.IsPregnant
   formIsBreastfeeding.value = patient.IsBreastfeeding
-  formNote.value = patient.Note
+  formNote.value = patient.Note || ''
 
   // Load patient allergies
   const allergies = getPatientAllergiesList(patient.PatientId)
   formAllergies.value = allergies.map(a => ({
     isIngredient: a.isIngredient,
     targetId: a.targetId,
-    severity: a.severity,
-    note: a.note
+    severity: a.severity || 'Nghiêm trọng',
+    note: a.note || ''
   }))
 
   // Load patient diseases
   const diseases = getPatientDiseasesList(patient.PatientId)
   formDiseases.value = diseases.map(d => ({
     diseaseId: d.diseaseId,
-    note: d.note
+    note: d.note || ''
   }))
 
   showFormModal.value = true
@@ -232,7 +232,7 @@ const removeDiseaseRow = (idx: number) => {
 }
 
 // Save patient form
-const savePatient = () => {
+const savePatient = async () => {
   if (!formFullName.value.trim()) {
     alert('Vui lòng nhập họ và tên bệnh nhân!')
     return
@@ -258,70 +258,50 @@ const savePatient = () => {
 
   if (isEditing.value && formPatientId.value !== null) {
     activePatientId = formPatientId.value
-    // Update basic info
-    const idx = store.patients.value.findIndex(p => p.PatientId === activePatientId)
-    if (idx !== -1) {
-      const patient = store.patients.value[idx]
-      if (patient) {
-        patient.FullName = patientData.FullName
-        patient.Phone = patientData.Phone
-        patient.Gender = patientData.Gender
-        patient.DateOfBirth = patientData.DateOfBirth
-        patient.WeightKg = patientData.WeightKg
-        patient.Address = patientData.Address
-        patient.IsPregnant = patientData.IsPregnant
-        patient.IsBreastfeeding = patientData.IsBreastfeeding
-        patient.Note = patientData.Note
-      }
-    }
+    await store.updatePatient(
+      activePatientId,
+      {
+        PatientId: activePatientId,
+        ...patientData,
+        CreatedAt: store.patients.value.find(p => p.PatientId === activePatientId)?.CreatedAt || new Date().toISOString().substring(0, 10)
+      },
+      formAllergies.value.map(fa => ({
+        isIngredient: fa.isIngredient,
+        targetId: fa.targetId,
+        severity: fa.severity,
+        note: fa.note
+      })),
+      formDiseases.value.map(fd => ({
+        diseaseId: fd.diseaseId,
+        note: fd.note
+      }))
+    )
   } else {
-    // Add new patient
-    activePatientId = store.patients.value.reduce((max, p) => p.PatientId > max ? p.PatientId : max, 0) + 1
-    const newPatient: Patient = {
-      PatientId: activePatientId,
-      ...patientData,
-      CreatedAt: new Date().toISOString().substring(0, 10)
-    }
-    store.patients.value.push(newPatient)
+    const newPat = await store.addPatient(
+      patientData,
+      formAllergies.value.map(fa => ({
+        isIngredient: fa.isIngredient,
+        targetId: fa.targetId,
+        severity: fa.severity,
+        note: fa.note
+      })),
+      formDiseases.value.map(fd => ({
+        diseaseId: fd.diseaseId,
+        note: fd.note
+      }))
+    )
+    activePatientId = newPat.PatientId
   }
-
-  // --- Clear and recreate relations for allergies ---
-  store.patientAllergies.value = store.patientAllergies.value.filter(pa => pa.PatientId !== activePatientId)
-  formAllergies.value.forEach(fa => {
-    store.patientAllergies.value.push({
-      AllergyId: Math.floor(Math.random() * 100000),
-      PatientId: activePatientId,
-      IngredientId: fa.isIngredient ? fa.targetId : null,
-      MedicineId: !fa.isIngredient ? fa.targetId : null,
-      AllergyNote: fa.note,
-      Severity: fa.severity
-    })
-  })
-
-  // --- Clear and recreate relations for diseases ---
-  store.patientDiseases.value = store.patientDiseases.value.filter(pd => pd.PatientId !== activePatientId)
-  formDiseases.value.forEach(fd => {
-    store.patientDiseases.value.push({
-      PatientDiseaseId: Math.floor(Math.random() * 100000),
-      PatientId: activePatientId,
-      DiseaseId: fd.diseaseId,
-      Note: fd.note
-    })
-  })
 
   showFormModal.value = false
   alert('Đã lưu thông tin hồ sơ bệnh án thành công!')
 }
 
 // Delete patient from list
-const deletePatient = (patient: Patient) => {
+const deletePatient = async (patient: Patient) => {
   if (!canManage.value) return
   if (confirm(`Bạn có chắc chắn muốn xóa hồ sơ của bệnh nhân "${patient.FullName}" khỏi hệ thống không?`)) {
-    // Clear relations
-    store.patientAllergies.value = store.patientAllergies.value.filter(pa => pa.PatientId !== patient.PatientId)
-    store.patientDiseases.value = store.patientDiseases.value.filter(pd => pd.PatientId !== patient.PatientId)
-    // Clear basic info
-    store.patients.value = store.patients.value.filter(p => p.PatientId !== patient.PatientId)
+    await store.deletePatient(patient.PatientId)
     alert('Đã xóa hồ sơ bệnh nhân!')
   }
 }
