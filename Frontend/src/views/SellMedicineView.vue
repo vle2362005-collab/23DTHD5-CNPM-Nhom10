@@ -115,6 +115,41 @@ const precheckAlerts = computed(() => {
     })
   })
 
+  // 3. Check Contraindications with Patient's Diseases
+  const patientDiseasesData = store.patientDiseases.value.filter(pd => pd.PatientId === activePat.PatientId)
+  patientDiseasesData.forEach(pd => {
+    const dis = store.diseases.value.find(d => d.DiseaseId === pd.DiseaseId)
+    if (dis) {
+      // Find a contraindication matching the disease and either this medicine or its ingredient
+      const contra = store.contraindications.value.find(c =>
+        c.DiseaseId === pd.DiseaseId &&
+        ((c.MedicineId === currentMed.MedicineId) ||
+         (c.IngredientId && medIngredients.some(mi => mi.IngredientId === c.IngredientId)))
+      )
+      if (contra) {
+        alerts.push({
+          severity: contra.Severity,
+          message: `🚫 Chống chỉ định: Thuốc này chống chỉ định với bệnh lý nền [${dis.DiseaseName}] của bệnh nhân! ${contra.Description || ''}`
+        })
+      }
+    }
+  })
+
+  // 4. Check Contraindications with Special Conditions
+  if (activePat.IsPregnant) {
+    const pregContra = store.contraindications.value.find(c =>
+      c.ConditionType === 'Đối tượng đặc biệt' &&
+      ((c.MedicineId === currentMed.MedicineId) ||
+       (c.IngredientId && medIngredients.some(mi => mi.IngredientId === c.IngredientId)))
+    )
+    if (pregContra) {
+      alerts.push({
+        severity: pregContra.Severity,
+        message: `🤰 Chống chỉ định: Thuốc này chống chỉ định ở phụ nữ mang thai! ${pregContra.Description || ''}`
+      })
+    }
+  }
+
   return alerts
 })
 
