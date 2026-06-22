@@ -71,6 +71,7 @@ const precheckAlerts = computed(() => {
   const patientAllergiesData = store.patientAllergies.value.filter(pa => pa.PatientId === activePat.PatientId)
   const medIngredients = store.medicineIngredients.value.filter(mi => mi.MedicineId === currentMed.MedicineId)
 
+  // 1a. Active ingredient allergy check
   medIngredients.forEach(mi => {
     const ing = store.activeIngredients.value.find(ai => ai.IngredientId === mi.IngredientId)
     if (ing) {
@@ -83,6 +84,15 @@ const precheckAlerts = computed(() => {
       }
     }
   })
+
+  // 1b. Direct brand/medicine allergy check
+  const isMedAllergic = patientAllergiesData.find(pa => pa.MedicineId === currentMed.MedicineId)
+  if (isMedAllergic) {
+    alerts.push({
+      severity: isMedAllergic.Severity || 'Nghiêm trọng',
+      message: `⚠️ Cảnh báo sớm: Bệnh nhân dị ứng trực tiếp với thuốc thương mại [${currentMed.MedicineName}]!`
+    })
+  }
 
   // 2. Check Interactions with current cart items
   store.prescriptionCart.value.forEach(item => {
