@@ -4,19 +4,22 @@ import { usePharmacyStore, type Medicine } from '../store/pharmacy'
 
 const store = usePharmacyStore()
 
-// State for search and filters
+// Sub-tabs State
+const activeSubTab = ref<'medicines' | 'ingredients' | 'druggroups'>('medicines')
+
+// State for search and filters (Medicines)
 const searchQuery = ref('')
 const selectedGroupId = ref<string>('all')
 const requiresPrescriptionFilter = ref<string>('all')
 const statusFilter = ref<string>('all')
 
-// Modals State
+// Modals State (Medicines)
 const showDetailModal = ref(false)
 const showFormModal = ref(false)
 const selectedMed = ref<Medicine | null>(null)
 const isEditing = ref(false)
 
-// Form Fields State
+// Form Fields State (Medicines)
 const formMedicineId = ref<number | null>(null)
 const formMedicineName = ref('')
 const formDrugGroupId = ref<string>('')
@@ -28,6 +31,22 @@ const formRequiresPrescription = ref(false)
 const formIsActive = ref(true)
 const formNote = ref('')
 const formIngredients = ref<{ IngredientId: number; Amount: string }[]>([])
+
+// Active Ingredients States
+const ingSearchQuery = ref('')
+const showIngModal = ref(false)
+const isEditingIng = ref(false)
+const formIngId = ref<number | null>(null)
+const formIngName = ref('')
+const formIngDescription = ref('')
+
+// Drug Groups States
+const groupSearchQuery = ref('')
+const showGroupModal = ref(false)
+const isEditingGroup = ref(false)
+const formGroupId = ref<number | null>(null)
+const formGroupName = ref('')
+const formGroupDescription = ref('')
 
 // Helper: check user permission
 const canManage = computed(() => {
@@ -78,6 +97,35 @@ const filteredMedicines = computed(() => {
     return matchesSearch && matchesGroup && matchesPrescription && matchesStatus
   })
 })
+
+// Filtered Active Ingredients list
+const filteredIngredients = computed(() => {
+  const query = ingSearchQuery.value.toLowerCase().trim()
+  if (!query) return store.activeIngredients.value
+  return store.activeIngredients.value.filter(
+    ing => ing.IngredientName.toLowerCase().includes(query) || 
+           (ing.Description && ing.Description.toLowerCase().includes(query))
+  )
+})
+
+// Filtered Drug Groups list
+const filteredDrugGroups = computed(() => {
+  const query = groupSearchQuery.value.toLowerCase().trim()
+  if (!query) return store.drugGroups.value
+  return store.drugGroups.value.filter(
+    dg => dg.GroupName.toLowerCase().includes(query) || 
+          (dg.Description && dg.Description.toLowerCase().includes(query))
+  )
+})
+
+// Relation counters
+const getIngredientMedicinesCount = (ingredientId: number) => {
+  return store.medicineIngredients.value.filter(mi => mi.IngredientId === ingredientId).length
+}
+
+const getGroupMedicinesCount = (groupId: number) => {
+  return store.medicines.value.filter(m => m.DrugGroupId === groupId).length
+}
 
 // Fetch active ingredients for a medicine
 const getMedicineIngredients = (medId: number) => {
@@ -231,147 +279,452 @@ const deleteMedicine = async (med: Medicine) => {
     alert('Đã xóa thuốc khỏi hệ thống!')
   }
 }
+
+// Active Ingredients CRUD Actions
+const openAddIngForm = () => {
+  if (!canManage.value) return
+  isEditingIng.value = false
+  formIngId.value = null
+  formIngName.value = ''
+  formIngDescription.value = ''
+  showIngModal.value = true
+}
+
+const openEditIngForm = (ing: any) => {
+  if (!canManage.value) return
+  isEditingIng.value = true
+  formIngId.value = ing.IngredientId
+  formIngName.value = ing.IngredientName
+  formIngDescription.value = ing.Description || ''
+  showIngModal.value = true
+}
+
+const saveIngredient = async () => {
+  if (!formIngName.value.trim()) {
+    alert('Vui lòng nhập tên hoạt chất!')
+    return
+  }
+  const ingredientData = {
+    IngredientName: formIngName.value.trim(),
+    Description: formIngDescription.value.trim() || null
+  }
+  
+  if (isEditingIng.value && formIngId.value !== null) {
+    await store.updateActiveIngredient(formIngId.value, {
+      IngredientId: formIngId.value,
+      ...ingredientData
+    })
+  } else {
+    await store.addActiveIngredient(ingredientData)
+  }
+  showIngModal.value = false
+  alert('Đã lưu thông tin hoạt chất thành công!')
+}
+
+const deleteIngredient = async (ing: any) => {
+  if (!canManage.value) return
+  const count = getIngredientMedicinesCount(ing.IngredientId)
+  if (count > 0) {
+    alert(`Không thể xóa hoạt chất này vì đang có ${count} thuốc liên kết! Vui lòng gỡ liên kết trước.`)
+    return
+  }
+  if (confirm(`Bạn có chắc chắn muốn xóa hoạt chất "${ing.IngredientName}" khỏi hệ thống?`)) {
+    await store.deleteActiveIngredient(ing.IngredientId)
+    alert('Đã xóa hoạt chất khỏi hệ thống!')
+  }
+}
+
+// Drug Groups CRUD Actions
+const openAddGroupForm = () => {
+  if (!canManage.value) return
+  isEditingGroup.value = false
+  formGroupId.value = null
+  formGroupName.value = ''
+  formGroupDescription.value = ''
+  showGroupModal.value = true
+}
+
+const openEditGroupForm = (group: any) => {
+  if (!canManage.value) return
+  isEditingGroup.value = true
+  formGroupId.value = group.DrugGroupId
+  formGroupName.value = group.GroupName
+  formGroupDescription.value = group.Description || ''
+  showGroupModal.value = true
+}
+
+const saveGroup = async () => {
+  if (!formGroupName.value.trim()) {
+    alert('Vui lòng nhập tên nhóm thuốc!')
+    return
+  }
+  const groupData = {
+    GroupName: formGroupName.value.trim(),
+    Description: formGroupDescription.value.trim() || null
+  }
+  
+  if (isEditingGroup.value && formGroupId.value !== null) {
+    await store.updateDrugGroup(formGroupId.value, {
+      DrugGroupId: formGroupId.value,
+      ...groupData
+    })
+  } else {
+    await store.addDrugGroup(groupData)
+  }
+  showGroupModal.value = false
+  alert('Đã lưu thông tin nhóm thuốc thành công!')
+}
+
+const deleteGroup = async (group: any) => {
+  if (!canManage.value) return
+  const count = getGroupMedicinesCount(group.DrugGroupId)
+  if (count > 0) {
+    alert(`Không thể xóa nhóm thuốc này vì đang có ${count} thuốc thuộc nhóm này! Vui lòng gỡ liên kết hoặc chuyển thuốc sang nhóm khác trước.`)
+    return
+  }
+  if (confirm(`Bạn có chắc chắn muốn xóa nhóm thuốc "${group.GroupName}" khỏi hệ thống?`)) {
+    await store.deleteDrugGroup(group.DrugGroupId)
+    alert('Đã xóa nhóm thuốc khỏi hệ thống!')
+  }
+}
 </script>
 
 <template>
   <div class="view-container">
-    <!-- Filter & Search Panel -->
-    <div class="grid-card search-filter-panel">
-      <div class="filters-row">
-        <!-- Search input -->
-        <div class="filter-col flex-1">
-          <label class="filter-label">Tìm kiếm thuốc:</label>
-          <div class="search-input-wrapper">
-            <input 
-              type="text" 
-              placeholder="Nhập tên thuốc, hoạt chất..." 
-              class="form-control"
-              v-model="searchQuery" 
-            />
-            <svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+    <!-- Tabs Header Row -->
+    <div class="tabs-header-row">
+      <button 
+        :class="['tab-btn', { active: activeSubTab === 'medicines' }]" 
+        @click="activeSubTab = 'medicines'"
+      >
+        💊 Danh mục Thuốc
+      </button>
+      <button 
+        :class="['tab-btn', { active: activeSubTab === 'ingredients' }]" 
+        @click="activeSubTab = 'ingredients'"
+      >
+        🧪 Danh mục Hoạt chất
+      </button>
+      <button 
+        :class="['tab-btn', { active: activeSubTab === 'druggroups' }]" 
+        @click="activeSubTab = 'druggroups'"
+      >
+        📦 Danh mục Nhóm thuốc
+      </button>
+    </div>
+
+    <!-- ==========================================
+      TAB 1: MEDICINES CATALOG
+    ========================================== -->
+    <div v-if="activeSubTab === 'medicines'">
+      <!-- Filter & Search Panel -->
+      <div class="grid-card search-filter-panel">
+        <div class="filters-row">
+          <!-- Search input -->
+          <div class="filter-col flex-1">
+            <label class="filter-label">Tìm kiếm thuốc:</label>
+            <div class="search-input-wrapper">
+              <input 
+                type="text" 
+                placeholder="Nhập tên thuốc, hoạt chất..." 
+                class="form-control"
+                v-model="searchQuery" 
+              />
+              <svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Drug Group filter -->
+          <div class="filter-col">
+            <label class="filter-label">Nhóm thuốc:</label>
+            <select v-model="selectedGroupId" class="form-control select-control">
+              <option value="all">-- Tất cả nhóm thuốc --</option>
+              <option v-for="dg in store.drugGroups.value" :key="dg.DrugGroupId" :value="dg.DrugGroupId.toString()">
+                {{ dg.GroupName }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Requires Prescription filter -->
+          <div class="filter-col">
+            <label class="filter-label">Loại đơn thuốc:</label>
+            <select v-model="requiresPrescriptionFilter" class="form-control select-control">
+              <option value="all">Tất cả</option>
+              <option value="true">Yêu cầu đơn thuốc</option>
+              <option value="false">Không kê đơn</option>
+            </select>
+          </div>
+
+          <!-- Status filter -->
+          <div class="filter-col">
+            <label class="filter-label">Trạng thái:</label>
+            <select v-model="statusFilter" class="form-control select-control">
+              <option value="all">Tất cả trạng thái</option>
+              <option value="true">Hoạt động</option>
+              <option value="false">Tạm ngừng</option>
+            </select>
           </div>
         </div>
 
-        <!-- Drug Group filter -->
-        <div class="filter-col">
-          <label class="filter-label">Nhóm thuốc:</label>
-          <select v-model="selectedGroupId" class="form-control select-control">
-            <option value="all">-- Tất cả nhóm thuốc --</option>
-            <option v-for="dg in store.drugGroups.value" :key="dg.DrugGroupId" :value="dg.DrugGroupId.toString()">
-              {{ dg.GroupName }}
-            </option>
-          </select>
-        </div>
-
-        <!-- Requires Prescription filter -->
-        <div class="filter-col">
-          <label class="filter-label">Loại đơn thuốc:</label>
-          <select v-model="requiresPrescriptionFilter" class="form-control select-control">
-            <option value="all">Tất cả</option>
-            <option value="true">Yêu cầu đơn thuốc</option>
-            <option value="false">Không kê đơn</option>
-          </select>
-        </div>
-
-        <!-- Status filter -->
-        <div class="filter-col">
-          <label class="filter-label">Trạng thái:</label>
-          <select v-model="statusFilter" class="form-control select-control">
-            <option value="all">Tất cả trạng thái</option>
-            <option value="true">Hoạt động</option>
-            <option value="false">Tạm ngừng</option>
-          </select>
+        <!-- Action buttons -->
+        <div class="panel-actions-row">
+          <button class="secondary-btn" @click="clearFilters" :disabled="!searchQuery && selectedGroupId === 'all' && requiresPrescriptionFilter === 'all' && statusFilter === 'all'">
+            Xóa bộ lọc
+          </button>
+          <button class="primary-btn flex-center" v-if="canManage" @click="openAddForm">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Thêm thuốc mới (Medicines)
+          </button>
         </div>
       </div>
 
-      <!-- Action buttons -->
-      <div class="panel-actions-row">
-        <button class="secondary-btn" @click="clearFilters" :disabled="!searchQuery && selectedGroupId === 'all' && requiresPrescriptionFilter === 'all' && statusFilter === 'all'">
-          Xóa bộ lọc
-        </button>
-        <button class="primary-btn flex-center" v-if="canManage" @click="openAddForm">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Thêm thuốc mới (Medicines)
-        </button>
+      <!-- Medicines Catalog List -->
+      <div class="grid-card" style="margin-top: 20px; overflow-x: auto;">
+        <h3 class="section-title" style="margin-bottom: 16px;">Danh mục thông tin thuốc ({{ filteredMedicines.length }} kết quả)</h3>
+        
+        <table class="data-table" v-if="filteredMedicines.length > 0">
+          <thead>
+            <tr>
+              <th>Mã số</th>
+              <th>Tên thuốc</th>
+              <th>Nhóm thuốc</th>
+              <th>Hàm lượng</th>
+              <th>Bào chế / ĐVT</th>
+              <th>Loại đơn</th>
+              <th>Đơn giá</th>
+              <th>Trạng thái</th>
+              <th style="text-align: center;">Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="med in filteredMedicines" :key="med.MedicineId">
+              <td>MED-00{{ med.MedicineId }}</td>
+              <td>
+                <div class="med-name-cell">
+                  <span class="med-title">{{ med.MedicineName }}</span>
+                  <!-- Brief active ingredients tag preview -->
+                  <div class="med-ings-preview" v-if="getMedicineIngredients(med.MedicineId).length > 0">
+                    <span v-for="ing in getMedicineIngredients(med.MedicineId)" :key="ing.id" class="ing-tag-mini">
+                      {{ ing.name }}
+                    </span>
+                  </div>
+                </div>
+              </td>
+              <td>{{ store.drugGroups.value.find(dg => dg.DrugGroupId === med.DrugGroupId)?.GroupName || 'Mặc định' }}</td>
+              <td><span class="strength-text">{{ med.Strength || '-' }}</span></td>
+              <td><small>{{ med.DosageForm }} / {{ med.Unit }}</small></td>
+              <td>
+                <span :class="['status-tag', med.RequiresPrescription ? 'danger' : 'safe']">
+                  {{ med.RequiresPrescription ? 'Yêu cầu đơn' : 'Không kê đơn' }}
+                </span>
+              </td>
+              <td><strong class="price-text">{{ med.Price.toLocaleString() }}đ</strong></td>
+              <td>
+                <span :class="['status-tag', med.IsActive ? 'safe' : 'danger']">
+                  {{ med.IsActive ? 'Hoạt động' : 'Tạm ngừng' }}
+                </span>
+              </td>
+              <td>
+                <div class="action-buttons-group">
+                  <button class="action-btn-icon view" @click="openDetail(med)" title="Xem chi tiết">
+                    👁️
+                  </button>
+                  <button class="action-btn-icon edit" v-if="canManage" @click="openEditForm(med)" title="Chỉnh sửa">
+                    ✏️
+                  </button>
+                  <button class="action-btn-icon toggle-status" v-if="canManage" @click="toggleActiveStatus(med)" :title="med.IsActive ? 'Tạm ngưng hoạt động' : 'Kích hoạt lại'">
+                    🔄
+                  </button>
+                  <button class="action-btn-icon delete" v-if="canManage" @click="deleteMedicine(med)" title="Xóa khỏi hệ thống">
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Empty state -->
+        <div class="empty-state-container flex-center" v-else>
+          <div class="empty-content">
+            <span class="empty-icon">💊</span>
+            <h4>Không tìm thấy thuốc phù hợp</h4>
+            <p>Hãy thử thay đổi điều kiện tìm kiếm hoặc bộ lọc.</p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Medicines Catalog List -->
-    <div class="grid-card" style="margin-top: 20px; overflow-x: auto;">
-      <h3 class="section-title" style="margin-bottom: 16px;">Danh mục thông tin thuốc ({{ filteredMedicines.length }} kết quả)</h3>
-      
-      <table class="data-table" v-if="filteredMedicines.length > 0">
-        <thead>
-          <tr>
-            <th>Mã số</th>
-            <th>Tên thuốc</th>
-            <th>Nhóm thuốc</th>
-            <th>Hàm lượng</th>
-            <th>Bào chế / ĐVT</th>
-            <th>Loại đơn</th>
-            <th>Đơn giá</th>
-            <th>Trạng thái</th>
-            <th style="text-align: center;">Hành động</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="med in filteredMedicines" :key="med.MedicineId">
-            <td>MED-00{{ med.MedicineId }}</td>
-            <td>
-              <div class="med-name-cell">
-                <span class="med-title">{{ med.MedicineName }}</span>
-                <!-- Brief active ingredients tag preview -->
-                <div class="med-ings-preview" v-if="getMedicineIngredients(med.MedicineId).length > 0">
-                  <span v-for="ing in getMedicineIngredients(med.MedicineId)" :key="ing.id" class="ing-tag-mini">
-                    {{ ing.name }}
-                  </span>
-                </div>
-              </div>
-            </td>
-            <td>{{ store.drugGroups.value.find(dg => dg.DrugGroupId === med.DrugGroupId)?.GroupName || 'Mặc định' }}</td>
-            <td><span class="strength-text">{{ med.Strength || '-' }}</span></td>
-            <td><small>{{ med.DosageForm }} / {{ med.Unit }}</small></td>
-            <td>
-              <span :class="['status-tag', med.RequiresPrescription ? 'danger' : 'safe']">
-                {{ med.RequiresPrescription ? 'Yêu cầu đơn' : 'Không kê đơn' }}
-              </span>
-            </td>
-            <td><strong class="price-text">{{ med.Price.toLocaleString() }}đ</strong></td>
-            <td>
-              <span :class="['status-tag', med.IsActive ? 'safe' : 'danger']">
-                {{ med.IsActive ? 'Hoạt động' : 'Tạm ngừng' }}
-              </span>
-            </td>
-            <td>
-              <div class="action-buttons-group">
-                <button class="action-btn-icon view" @click="openDetail(med)" title="Xem chi tiết">
-                  👁️
-                </button>
-                <button class="action-btn-icon edit" v-if="canManage" @click="openEditForm(med)" title="Chỉnh sửa">
-                  ✏️
-                </button>
-                <button class="action-btn-icon toggle-status" v-if="canManage" @click="toggleActiveStatus(med)" :title="med.IsActive ? 'Tạm ngưng hoạt động' : 'Kích hoạt lại'">
-                  🔄
-                </button>
-                <button class="action-btn-icon delete" v-if="canManage" @click="deleteMedicine(med)" title="Xóa khỏi hệ thống">
-                  🗑️
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- ==========================================
+      TAB 2: ACTIVE INGREDIENTS CATALOG
+    ========================================== -->
+    <div v-else-if="activeSubTab === 'ingredients'">
+      <!-- Search & Filters -->
+      <div class="grid-card search-filter-panel">
+        <div class="filters-row">
+          <div class="filter-col flex-1">
+            <label class="filter-label">Tìm kiếm hoạt chất:</label>
+            <div class="search-input-wrapper">
+              <input 
+                type="text" 
+                placeholder="Nhập tên hoạt chất, mô tả..." 
+                class="form-control"
+                v-model="ingSearchQuery" 
+              />
+              <svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        
+        <div class="panel-actions-row">
+          <button class="secondary-btn" @click="ingSearchQuery = ''" :disabled="!ingSearchQuery">
+            Xóa bộ lọc
+          </button>
+          <button class="primary-btn flex-center" v-if="canManage" @click="openAddIngForm">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Thêm hoạt chất mới (Ingredients)
+          </button>
+        </div>
+      </div>
 
-      <!-- Empty state -->
-      <div class="empty-state-container flex-center" v-else>
-        <div class="empty-content">
-          <span class="empty-icon">💊</span>
-          <h4>Không tìm thấy thuốc phù hợp</h4>
-          <p>Hãy thử thay đổi điều kiện tìm kiếm hoặc bộ lọc.</p>
+      <!-- Active Ingredients Table -->
+      <div class="grid-card" style="margin-top: 20px; overflow-x: auto;">
+        <h3 class="section-title" style="margin-bottom: 16px;">Danh mục hoạt chất ({{ filteredIngredients.length }} kết quả)</h3>
+        
+        <table class="data-table" v-if="filteredIngredients.length > 0">
+          <thead>
+            <tr>
+              <th style="width: 150px;">Mã hoạt chất</th>
+              <th>Tên hoạt chất</th>
+              <th>Mô tả / Vai trò dược lý</th>
+              <th style="width: 180px; text-align: center;">Số thuốc liên kết</th>
+              <th style="text-align: center; width: 150px;">Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="ing in filteredIngredients" :key="ing.IngredientId">
+              <td>ING-00{{ ing.IngredientId }}</td>
+              <td><strong class="med-title">{{ ing.IngredientName }}</strong></td>
+              <td>{{ ing.Description || '-' }}</td>
+              <td style="text-align: center;">
+                <span class="ing-tag-mini" style="font-size: 12px; padding: 4px 8px;">
+                  {{ getIngredientMedicinesCount(ing.IngredientId) }} thuốc
+                </span>
+              </td>
+              <td>
+                <div class="action-buttons-group">
+                  <button class="action-btn-icon edit" v-if="canManage" @click="openEditIngForm(ing)" title="Chỉnh sửa">
+                    ✏️
+                  </button>
+                  <button class="action-btn-icon delete" v-if="canManage" @click="deleteIngredient(ing)" title="Xóa khỏi hệ thống">
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Empty state -->
+        <div class="empty-state-container flex-center" v-else>
+          <div class="empty-content">
+            <span class="empty-icon">🧪</span>
+            <h4>Không tìm thấy hoạt chất phù hợp</h4>
+            <p>Hãy thử thay đổi từ khóa tìm kiếm.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      TAB 3: DRUG GROUPS CATALOG
+    ========================================== -->
+    <div v-else-if="activeSubTab === 'druggroups'">
+      <!-- Search & Filters -->
+      <div class="grid-card search-filter-panel">
+        <div class="filters-row">
+          <div class="filter-col flex-1">
+            <label class="filter-label">Tìm kiếm nhóm thuốc:</label>
+            <div class="search-input-wrapper">
+              <input 
+                type="text" 
+                placeholder="Nhập tên nhóm thuốc, mô tả..." 
+                class="form-control"
+                v-model="groupSearchQuery" 
+              />
+              <svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        
+        <div class="panel-actions-row">
+          <button class="secondary-btn" @click="groupSearchQuery = ''" :disabled="!groupSearchQuery">
+            Xóa bộ lọc
+          </button>
+          <button class="primary-btn flex-center" v-if="canManage" @click="openAddGroupForm">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Thêm nhóm thuốc mới (Drug Groups)
+          </button>
+        </div>
+      </div>
+
+      <!-- Drug Groups Table -->
+      <div class="grid-card" style="margin-top: 20px; overflow-x: auto;">
+        <h3 class="section-title" style="margin-bottom: 16px;">Danh mục nhóm thuốc ({{ filteredDrugGroups.length }} kết quả)</h3>
+        
+        <table class="data-table" v-if="filteredDrugGroups.length > 0">
+          <thead>
+            <tr>
+              <th style="width: 150px;">Mã nhóm</th>
+              <th>Tên nhóm thuốc</th>
+              <th>Mô tả nhóm dược lý</th>
+              <th style="width: 180px; text-align: center;">Số lượng thuốc</th>
+              <th style="text-align: center; width: 150px;">Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="g in filteredDrugGroups" :key="g.DrugGroupId">
+              <td>GP-00{{ g.DrugGroupId }}</td>
+              <td><strong class="med-title">{{ g.GroupName }}</strong></td>
+              <td>{{ g.Description || '-' }}</td>
+              <td style="text-align: center;">
+                <span class="ing-tag-mini" style="font-size: 12px; padding: 4px 8px; background-color: rgba(59, 130, 246, 0.1); color: var(--info); border: 1px solid rgba(59, 130, 246, 0.15)">
+                  {{ getGroupMedicinesCount(g.DrugGroupId) }} thuốc
+                </span>
+              </td>
+              <td>
+                <div class="action-buttons-group">
+                  <button class="action-btn-icon edit" v-if="canManage" @click="openEditGroupForm(g)" title="Chỉnh sửa">
+                    ✏️
+                  </button>
+                  <button class="action-btn-icon delete" v-if="canManage" @click="deleteGroup(g)" title="Xóa khỏi hệ thống">
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Empty state -->
+        <div class="empty-state-container flex-center" v-else>
+          <div class="empty-content">
+            <span class="empty-icon">📦</span>
+            <h4>Không tìm thấy nhóm thuốc phù hợp</h4>
+            <p>Hãy thử thay đổi từ khóa tìm kiếm.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -567,6 +920,72 @@ const deleteMedicine = async (med: Medicine) => {
         <div class="modal-footer">
           <button class="secondary-btn" @click="showFormModal = false">Hủy</button>
           <button class="primary-btn" @click="saveMedicine">Lưu lại</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      MODAL 3: ADD / EDIT ACTIVE INGREDIENT FORM
+    ========================================== -->
+    <div class="modal-overlay flex-center" v-if="showIngModal">
+      <div class="modal-card form-modal">
+        <div class="modal-header">
+          <div class="modal-title-area">
+            <h3>{{ isEditingIng ? 'Chỉnh sửa hoạt chất' : 'Thêm hoạt chất mới' }}</h3>
+          </div>
+          <button class="close-modal-btn" @click="showIngModal = false">×</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-inputs-grid">
+            <div class="form-group span-2">
+              <label class="form-label required-label">Tên hoạt chất (ví dụ: Paracetamol, Amoxicillin):</label>
+              <input type="text" v-model="formIngName" class="form-control" placeholder="Nhập tên danh pháp quốc tế..." />
+            </div>
+
+            <div class="form-group span-2">
+              <label class="form-label">Mô tả / Ghi chú dược học:</label>
+              <textarea v-model="formIngDescription" class="form-control textarea-control" rows="3" placeholder="Mô tả tác dụng, lưu ý khi phối hợp thuốc..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="secondary-btn" @click="showIngModal = false">Hủy</button>
+          <button class="primary-btn" @click="saveIngredient">Lưu lại</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      MODAL 4: ADD / EDIT DRUG GROUP FORM
+    ========================================== -->
+    <div class="modal-overlay flex-center" v-if="showGroupModal">
+      <div class="modal-card form-modal">
+        <div class="modal-header">
+          <div class="modal-title-area">
+            <h3>{{ isEditingGroup ? 'Chỉnh sửa nhóm thuốc' : 'Thêm nhóm thuốc mới' }}</h3>
+          </div>
+          <button class="close-modal-btn" @click="showGroupModal = false">×</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-inputs-grid">
+            <div class="form-group span-2">
+              <label class="form-label required-label">Tên nhóm thuốc (ví dụ: Kháng sinh, Giảm đau hạ sốt):</label>
+              <input type="text" v-model="formGroupName" class="form-control" placeholder="Nhập tên phân nhóm..." />
+            </div>
+
+            <div class="form-group span-2">
+              <label class="form-label">Mô tả tác dụng lâm sàng chính:</label>
+              <textarea v-model="formGroupDescription" class="form-control textarea-control" rows="3" placeholder="Mô tả công dụng và các lưu ý của nhóm thuốc này..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="secondary-btn" @click="showGroupModal = false">Hủy</button>
+          <button class="primary-btn" @click="saveGroup">Lưu lại</button>
         </div>
       </div>
     </div>
@@ -984,5 +1403,34 @@ const deleteMedicine = async (med: Medicine) => {
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+/* Tabs navigation styles */
+.tabs-header-row {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 20px;
+}
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab-btn:hover {
+  color: var(--text-main);
+}
+.tab-btn.active {
+  color: var(--primary-medium);
+  border-bottom-color: var(--primary-medium);
 }
 </style>

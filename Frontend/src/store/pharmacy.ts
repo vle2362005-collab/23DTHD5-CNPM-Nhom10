@@ -530,6 +530,44 @@ export function usePharmacyStore() {
     medicineIngredients.value = medicineIngredients.value.filter(mi => mi.MedicineId !== medicineId)
   }
 
+  const addDrugGroup = async (groupData: Omit<DrugGroup, 'DrugGroupId'>) => {
+    const newGroup = await ApiService.createDrugGroup(groupData)
+    drugGroups.value.push(newGroup)
+    return newGroup
+  }
+
+  const updateDrugGroup = async (groupId: number, groupData: DrugGroup) => {
+    const updatedGroup = await ApiService.updateDrugGroup(groupId, groupData)
+    const idx = drugGroups.value.findIndex(dg => dg.DrugGroupId === groupId)
+    if (idx !== -1) {
+      drugGroups.value[idx] = updatedGroup
+    }
+  }
+
+  const deleteDrugGroup = async (groupId: number) => {
+    await ApiService.deleteDrugGroup(groupId)
+    drugGroups.value = drugGroups.value.filter(dg => dg.DrugGroupId !== groupId)
+  }
+
+  const addActiveIngredient = async (ingredientData: Omit<ActiveIngredient, 'IngredientId'>) => {
+    const newIngredient = await ApiService.createIngredient(ingredientData)
+    activeIngredients.value.push(newIngredient)
+    return newIngredient
+  }
+
+  const updateActiveIngredient = async (ingredientId: number, ingredientData: ActiveIngredient) => {
+    const updatedIngredient = await ApiService.updateIngredient(ingredientId, ingredientData)
+    const idx = activeIngredients.value.findIndex(ai => ai.IngredientId === ingredientId)
+    if (idx !== -1) {
+      activeIngredients.value[idx] = updatedIngredient
+    }
+  }
+
+  const deleteActiveIngredient = async (ingredientId: number) => {
+    await ApiService.deleteIngredient(ingredientId)
+    activeIngredients.value = activeIngredients.value.filter(ai => ai.IngredientId !== ingredientId)
+  }
+
   const hasInitialized = ref(false)
 
   const initializeStore = async () => {
@@ -614,6 +652,12 @@ export function usePharmacyStore() {
     addMedicine,
     updateMedicine,
     deleteMedicine,
+    addDrugGroup,
+    updateDrugGroup,
+    deleteDrugGroup,
+    addActiveIngredient,
+    updateActiveIngredient,
+    deleteActiveIngredient,
     initializeStore
   }
 }
