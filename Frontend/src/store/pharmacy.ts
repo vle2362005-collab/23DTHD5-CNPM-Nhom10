@@ -503,17 +503,13 @@ export function usePharmacyStore() {
       Strength: medicineData.Strength || null,
       DosageForm: medicineData.DosageForm || null,
       Unit: medicineData.Unit || null,
-      Note: medicineData.Note || null
+      Note: medicineData.Note || null,
+      Ingredients: ingredients.map(fi => ({ IngredientId: fi.IngredientId, Amount: fi.Amount }))
     })
     medicines.value.push(newMed)
 
-    ingredients.forEach(fi => {
-      medicineIngredients.value.push({
-        MedicineId: newMed.MedicineId,
-        IngredientId: fi.IngredientId,
-        Amount: fi.Amount
-      })
-    })
+    hasInitialized.value = false
+    await initializeStore()
     return newMed
   }
 
@@ -527,21 +523,16 @@ export function usePharmacyStore() {
       Strength: medicineData.Strength || null,
       DosageForm: medicineData.DosageForm || null,
       Unit: medicineData.Unit || null,
-      Note: medicineData.Note || null
-    })
+      Note: medicineData.Note || null,
+      Ingredients: ingredients.map(fi => ({ IngredientId: fi.IngredientId, Amount: fi.Amount }))
+    } as any)
     const idx = medicines.value.findIndex(m => m.MedicineId === medicineId)
     if (idx !== -1) {
       medicines.value[idx] = updatedMed
     }
 
-    medicineIngredients.value = medicineIngredients.value.filter(mi => mi.MedicineId !== medicineId)
-    ingredients.forEach(fi => {
-      medicineIngredients.value.push({
-        MedicineId: medicineId,
-        IngredientId: fi.IngredientId,
-        Amount: fi.Amount
-      })
-    })
+    hasInitialized.value = false
+    await initializeStore()
   }
 
   const deleteMedicine = async (medicineId: number) => {

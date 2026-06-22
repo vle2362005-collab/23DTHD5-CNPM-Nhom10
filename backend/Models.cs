@@ -46,4 +46,49 @@ namespace Backend.Models
         [ForeignKey("RoleId")]
         public DbRole? Role { get; set; }
     }
+
+    [Table("Medicines")]
+    public class DbMedicine
+    {
+        [Key]
+        public int MedicineId { get; set; }
+
+        public int? DrugGroupId { get; set; }
+
+        [Required]
+        [StringLength(150)]
+        public string MedicineName { get; set; } = string.Empty;
+
+        [StringLength(100)]
+        public string? Strength { get; set; }
+
+        [StringLength(100)]
+        public string? DosageForm { get; set; }
+
+        [StringLength(50)]
+        public string? Unit { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal Price { get; set; } = 0;
+
+        public bool RequiresPrescription { get; set; } = false;
+
+        public bool IsActive { get; set; } = true;
+
+        [StringLength(500)]
+        public string? Note { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+    }
+
+    [Table("MedicineIngredients")]
+    public class DbMedicineIngredient
+    {
+        public int MedicineId { get; set; }
+
+        public int IngredientId { get; set; }
+
+        [StringLength(100)]
+        public string? Amount { get; set; }
+    }
 }

@@ -236,8 +236,35 @@ app.MapGet("/api/users", async (PharmacyDbContext db) =>
 app.MapGet("/api/patients", () => Results.Ok(patients)).RequireAuthorization();
 app.MapGet("/api/druggroups", () => Results.Ok(drugGroups)).RequireAuthorization();
 app.MapGet("/api/ingredients", () => Results.Ok(activeIngredients)).RequireAuthorization();
-app.MapGet("/api/medicines", () => Results.Ok(medicines)).RequireAuthorization();
-app.MapGet("/api/medicineingredients", () => Results.Ok(medicineIngredients)).RequireAuthorization();
+app.MapGet("/api/medicines", async (PharmacyDbContext db) =>
+{
+    var dbMedicines = await db.Medicines.ToListAsync();
+    var medicineDtos = dbMedicines.Select(m => new Medicine(
+        m.MedicineId,
+        m.DrugGroupId,
+        m.MedicineName,
+        m.Strength,
+        m.DosageForm,
+        m.Unit,
+        m.Price,
+        m.RequiresPrescription,
+        m.IsActive,
+        m.Note,
+        m.CreatedAt.ToString("yyyy-MM-dd")
+    ));
+    return Results.Ok(medicineDtos);
+}).RequireAuthorization();
+
+app.MapGet("/api/medicineingredients", async (PharmacyDbContext db) =>
+{
+    var dbIngredients = await db.MedicineIngredients.ToListAsync();
+    var ingredientDtos = dbIngredients.Select(mi => new MedicineIngredient(
+        mi.MedicineId,
+        mi.IngredientId,
+        mi.Amount
+    ));
+    return Results.Ok(ingredientDtos);
+}).RequireAuthorization();
 app.MapGet("/api/diseases", () => Results.Ok(diseases)).RequireAuthorization();
 app.MapGet("/api/patientdiseases", () => Results.Ok(patientDiseases)).RequireAuthorization();
 app.MapGet("/api/patientallergies", () => Results.Ok(patientAllergies)).RequireAuthorization();
@@ -273,27 +300,117 @@ app.MapDelete("/api/patients/{id:int}", (int id) =>
 }).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
 
 // Medicine CRUD endpoints
-app.MapPost("/api/medicines", (Medicine medicine) =>
+app.MapPost("/api/medicines", async (MedicineRequest request, PharmacyDbContext db) =>
 {
-    var newId = medicines.Any() ? medicines.Max(m => m.MedicineId) + 1 : 1;
-    var newMed = medicine with { MedicineId = newId, CreatedAt = DateTime.Now.ToString("yyyy-MM-dd") };
-    medicines.Add(newMed);
-    return Results.Ok(newMed);
+    var dbMedicine = new DbMedicine
+    {
+        DrugGroupId = request.DrugGroupId,
+        MedicineName = request.MedicineName,
+        Strength = request.Strength,
+        DosageForm = request.DosageForm,
+        Unit = request.Unit,
+        Price = request.Price,
+        RequiresPrescription = request.RequiresPrescription,
+        IsActive = request.IsActive,
+        Note = request.Note,
+        CreatedAt = DateTime.Now
+    };
+
+    db.Medicines.Add(dbMedicine);
+    await db.SaveChangesAsync();
+
+    if (request.Ingredients != null)
+    {
+        foreach (var ing in request.Ingredients)
+        {
+            db.MedicineIngredients.Add(new DbMedicineIngredient
+            {
+                MedicineId = dbMedicine.MedicineId,
+                IngredientId = ing.IngredientId,
+                Amount = ing.Amount
+            });
+        }
+        await db.SaveChangesAsync();
+    }
+
+    var createdMedicineDto = new Medicine(
+        dbMedicine.MedicineId,
+        dbMedicine.DrugGroupId,
+        dbMedicine.MedicineName,
+        dbMedicine.Strength,
+        dbMedicine.DosageForm,
+        dbMedicine.Unit,
+        dbMedicine.Price,
+        dbMedicine.RequiresPrescription,
+        dbMedicine.IsActive,
+        dbMedicine.Note,
+        dbMedicine.CreatedAt.ToString("yyyy-MM-dd")
+    );
+
+    return Results.Ok(createdMedicineDto);
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
-app.MapPut("/api/medicines/{id:int}", (int id, Medicine medicine) =>
+app.MapPut("/api/medicines/{id:int}", async (int id, MedicineRequest request, PharmacyDbContext db) =>
 {
-    var idx = medicines.FindIndex(m => m.MedicineId == id);
-    if (idx < 0) return Results.NotFound("Medicine not found");
-    medicines[idx] = medicine with { MedicineId = id };
-    return Results.Ok(medicines[idx]);
+    var dbMedicine = await db.Medicines.FindAsync(id);
+    if (dbMedicine == null) return Results.NotFound("Medicine not found");
+
+    dbMedicine.DrugGroupId = request.DrugGroupId;
+    dbMedicine.MedicineName = request.MedicineName;
+    dbMedicine.Strength = request.Strength;
+    dbMedicine.DosageForm = request.DosageForm;
+    dbMedicine.Unit = request.Unit;
+    dbMedicine.Price = request.Price;
+    dbMedicine.RequiresPrescription = request.RequiresPrescription;
+    dbMedicine.IsActive = request.IsActive;
+    dbMedicine.Note = request.Note;
+
+    var existingIngredients = db.MedicineIngredients.Where(mi => mi.MedicineId == id);
+    db.MedicineIngredients.RemoveRange(existingIngredients);
+
+    if (request.Ingredients != null)
+    {
+        foreach (var ing in request.Ingredients)
+        {
+            db.MedicineIngredients.Add(new DbMedicineIngredient
+            {
+                MedicineId = id,
+                IngredientId = ing.IngredientId,
+                Amount = ing.Amount
+            });
+        }
+    }
+
+    await db.SaveChangesAsync();
+
+    var updatedMedicineDto = new Medicine(
+        dbMedicine.MedicineId,
+        dbMedicine.DrugGroupId,
+        dbMedicine.MedicineName,
+        dbMedicine.Strength,
+        dbMedicine.DosageForm,
+        dbMedicine.Unit,
+        dbMedicine.Price,
+        dbMedicine.RequiresPrescription,
+        dbMedicine.IsActive,
+        dbMedicine.Note,
+        dbMedicine.CreatedAt.ToString("yyyy-MM-dd")
+    );
+
+    return Results.Ok(updatedMedicineDto);
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
-app.MapDelete("/api/medicines/{id:int}", (int id) =>
+app.MapDelete("/api/medicines/{id:int}", async (int id, PharmacyDbContext db) =>
 {
-    var idx = medicines.FindIndex(m => m.MedicineId == id);
-    if (idx < 0) return Results.NotFound("Medicine not found");
-    medicines.RemoveAt(idx);
+    var dbMedicine = await db.Medicines.FindAsync(id);
+    if (dbMedicine == null) return Results.NotFound("Medicine not found");
+
+    var existingIngredients = db.MedicineIngredients.Where(mi => mi.MedicineId == id);
+    db.MedicineIngredients.RemoveRange(existingIngredients);
+
+    db.Medicines.Remove(dbMedicine);
+    await db.SaveChangesAsync();
+
     return Results.Ok(new { success = true });
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
@@ -628,3 +745,17 @@ public record CartItemDto(int MedicineId, int Quantity, string DosageInstruction
 public record SafetyCheckRequest(int PatientId, List<CartItemDto> CartItems);
 public record SaleRequest(int PatientId, List<CartItemDto> CartItems, string FinalDecision, List<Warning>? Warnings, string? Note);
 public record LoginRequest(string Email, string Pin);
+
+public record MedicineRequest(
+    int? DrugGroupId, 
+    string MedicineName, 
+    string? Strength, 
+    string? DosageForm, 
+    string? Unit, 
+    decimal Price, 
+    bool RequiresPrescription, 
+    bool IsActive, 
+    string? Note,
+    List<MedicineIngredientDto>? Ingredients
+);
+public record MedicineIngredientDto(int IngredientId, string? Amount);

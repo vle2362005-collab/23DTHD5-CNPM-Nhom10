@@ -238,8 +238,8 @@ export const ApiService = {
   async getMedicines(): Promise<Medicine[]> {
     return apiGet<Medicine[]>('/medicines', localMocks.medicines)
   },
-  async createMedicine(medicine: Omit<Medicine, 'MedicineId' | 'CreatedAt'>): Promise<Medicine> {
-    return apiPost<Medicine, Omit<Medicine, 'MedicineId' | 'CreatedAt'>>('/medicines', medicine, () => {
+  async createMedicine(medicine: Omit<Medicine, 'MedicineId' | 'CreatedAt'> & { Ingredients?: { IngredientId: number; Amount: string }[] }): Promise<Medicine> {
+    return apiPost<Medicine, typeof medicine>('/medicines', medicine, () => {
       const newId = localMocks.medicines.length > 0 ? Math.max(...localMocks.medicines.map(m => m.MedicineId)) + 1 : 1
       const newMed: Medicine = {
         ...medicine,
@@ -247,13 +247,32 @@ export const ApiService = {
         CreatedAt: new Date().toISOString().substring(0, 10)
       }
       localMocks.medicines.push(newMed)
+      if (medicine.Ingredients) {
+        medicine.Ingredients.forEach(ing => {
+          localMocks.medicineIngredients.push({
+            MedicineId: newId,
+            IngredientId: ing.IngredientId,
+            Amount: ing.Amount
+          })
+        })
+      }
       return newMed
     })
   },
-  async updateMedicine(id: number, medicine: Medicine): Promise<Medicine> {
-    return apiPut<Medicine, Medicine>(`/medicines/${id}`, medicine, () => {
+  async updateMedicine(id: number, medicine: Medicine & { Ingredients?: { IngredientId: number; Amount: string }[] }): Promise<Medicine> {
+    return apiPut<Medicine, typeof medicine>(`/medicines/${id}`, medicine, () => {
       const idx = localMocks.medicines.findIndex(m => m.MedicineId == id)
       if (idx >= 0) localMocks.medicines[idx] = medicine
+      if (medicine.Ingredients) {
+        localMocks.medicineIngredients = localMocks.medicineIngredients.filter(mi => mi.MedicineId !== id)
+        medicine.Ingredients.forEach(ing => {
+          localMocks.medicineIngredients.push({
+            MedicineId: id,
+            IngredientId: ing.IngredientId,
+            Amount: ing.Amount
+          })
+        })
+      }
       return medicine
     })
   },
