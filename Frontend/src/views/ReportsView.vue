@@ -33,6 +33,36 @@ interface StatisticsReport {
 const stats = ref<StatisticsReport | null>(null)
 const isLoading = ref(false)
 
+// Interaction States for Charts
+const hoveredDayIdx = ref<number | null>(null)
+const tooltipX = ref(0)
+const tooltipY = ref(0)
+const hoveredDonutIdx = ref<number | null>(null)
+
+const hoveredData = computed(() => {
+  if (hoveredDayIdx.value === null) return null
+  return chartDaysData.value[hoveredDayIdx.value] || null
+})
+
+const handleMouseMove = (event: MouseEvent, index: number) => {
+  hoveredDayIdx.value = index
+  const cardElement = (event.currentTarget as HTMLElement).closest('.chart-card')
+  if (cardElement) {
+    const rect = cardElement.getBoundingClientRect()
+    tooltipX.value = event.clientX - rect.left + 15
+    tooltipY.value = event.clientY - rect.top - 80
+  }
+}
+
+const handleMouseLeave = () => {
+  hoveredDayIdx.value = null
+}
+
+const activeDonutCategory = computed(() => {
+  if (hoveredDonutIdx.value === null) return null
+  return warningCategoriesBreakdown.value[hoveredDonutIdx.value] || null
+})
+
 const fetchStats = async () => {
   isLoading.value = true
   try {
@@ -145,6 +175,7 @@ const warningApprovalRate = computed(() => stats.value?.WarningApprovalRate ?? 1
 const chartDaysData = computed(() => {
   if (!stats.value?.ChartDaysData) return []
   return stats.value.ChartDaysData.map(d => ({
+    date: d.Date,
     label: d.Label,
     revenue: d.Revenue,
     warnings: d.Warnings
@@ -166,6 +197,23 @@ const revenuePath = computed(() => {
   return points.length > 0 ? `M ${points.join(' L ')}` : ''
 })
 
+// Generate SVG Area Path for Revenue
+const revenueAreaPath = computed(() => {
+  const data = chartDaysData.value
+  if (data.length === 0) return ''
+  const maxRevenue = Math.max(...data.map(d => d.revenue), 100000)
+  
+  const points = data.map((d, index) => {
+    const x = 40 + index * 70
+    const y = 170 - (d.revenue / maxRevenue) * 130
+    return `${x},${y}`
+  })
+  
+  const startPoint = `40,170`
+  const endPoint = `${40 + (data.length - 1) * 70},170`
+  return `M ${startPoint} L ${points.join(' L ')} L ${endPoint} Z`
+})
+
 // Generate SVG Path for Warnings Line
 const warningsPath = computed(() => {
   const data = chartDaysData.value
@@ -183,6 +231,34 @@ const warningsPath = computed(() => {
 // Max values for chart rendering bounds
 const maxRevenueValue = computed(() => {
   return Math.max(...chartDaysData.value.map(d => d.revenue), 100000)
+})
+
+// Compute revenue point circles
+const revenuePoints = computed(() => {
+  const data = chartDaysData.value
+  const maxRevenue = Math.max(...data.map(d => d.revenue), 100000)
+  return data.map((d, index) => {
+    const x = 40 + index * 70
+    const y = 170 - (d.revenue / maxRevenue) * 130
+    return { x, y, value: d.revenue }
+  })
+})
+
+const guideLineX = computed(() => {
+  if (hoveredDayIdx.value === null) return null
+  const pt = revenuePoints.value[hoveredDayIdx.value]
+  return pt ? pt.x : null
+})
+
+// Compute warnings point circles
+const warningsPoints = computed(() => {
+  const data = chartDaysData.value
+  const maxWarnings = Math.max(...data.map(d => d.warnings), 3)
+  return data.map((d, index) => {
+    const x = 40 + index * 70
+    const y = 170 - (d.warnings / maxWarnings) * 110
+    return { x, y, value: d.warnings }
+  })
 })
 
 // ==========================================
@@ -330,13 +406,36 @@ const getSeverityClass = (severity: string) => {
           </div>
         </div>
 
-        <div class="chart-wrapper">
+        <div class="chart-wrapper" style="position: relative;">
           <svg viewBox="0 0 500 200" class="svg-chart">
+            <defs>
+              <linearGradient id="revenueAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--primary-light)" stop-opacity="0.25" />
+                <stop offset="100%" stop-color="var(--primary-light)" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+
             <!-- Grid Lines -->
             <line x1="40" y1="20" x2="480" y2="20" stroke="var(--border-color)" stroke-width="1" stroke-dasharray="3 3" />
             <line x1="40" y1="70" x2="480" y2="70" stroke="var(--border-color)" stroke-width="1" stroke-dasharray="3 3" />
             <line x1="40" y1="120" x2="480" y2="120" stroke="var(--border-color)" stroke-width="1" stroke-dasharray="3 3" />
             <line x1="40" y1="170" x2="480" y2="170" stroke="var(--border-color)" stroke-width="1.5" />
+
+            <!-- Vertical guide line on hover -->
+            <line 
+              v-if="guideLineX !== null"
+              :x1="guideLineX"
+              y1="20"
+              :x2="guideLineX"
+              y2="170"
+              stroke="var(--primary-light)"
+              stroke-width="1.5"
+              stroke-dasharray="3 3"
+              opacity="0.6"
+            />
+
+            <!-- Revenue Gradient Area -->
+            <path :d="revenueAreaPath" fill="url(#revenueAreaGradient)" />
 
             <!-- Revenue Trend Line -->
             <path :d="revenuePath" fill="none" stroke="var(--primary-light)" stroke-width="3" stroke-linecap="round" />
@@ -345,15 +444,30 @@ const getSeverityClass = (severity: string) => {
             <path :d="warningsPath" fill="none" stroke="#ef4444" stroke-width="2" stroke-dasharray="4 4" stroke-linecap="round" />
 
             <!-- Dynamic Graph Nodes for Revenue -->
-            <g v-for="(d, idx) in chartDaysData" :key="'rev-dot-' + idx">
+            <g v-for="(p, idx) in revenuePoints" :key="'rev-dot-' + idx">
               <circle 
-                v-if="d.revenue > 0"
-                :cx="40 + idx * 70" 
-                :cy="170 - (d.revenue / maxRevenueValue) * 130" 
-                r="5" 
+                v-if="p.value > 0"
+                :cx="p.x" 
+                :cy="p.y" 
+                :r="hoveredDayIdx === idx ? 6.5 : 4.5" 
                 fill="#ffffff" 
                 stroke="var(--primary-light)" 
-                stroke-width="2.5" 
+                :stroke-width="hoveredDayIdx === idx ? 3.5 : 2.5" 
+                class="chart-dot"
+              />
+            </g>
+
+            <!-- Dynamic Graph Nodes for Warnings -->
+            <g v-for="(p, idx) in warningsPoints" :key="'warn-dot-' + idx">
+              <circle 
+                v-if="p.value > 0"
+                :cx="p.x" 
+                :cy="p.y" 
+                :r="hoveredDayIdx === idx ? 5.5 : 3.5" 
+                fill="#ffffff" 
+                stroke="#ef4444" 
+                :stroke-width="hoveredDayIdx === idx ? 3 : 2" 
+                class="chart-dot warn-dot"
               />
             </g>
 
@@ -364,6 +478,7 @@ const getSeverityClass = (severity: string) => {
               :x="40 + idx * 70" 
               y="190" 
               class="chart-label"
+              :class="{ 'active': hoveredDayIdx === idx }"
             >
               {{ d.label }}
             </text>
@@ -372,7 +487,40 @@ const getSeverityClass = (severity: string) => {
             <text x="35" y="24" class="chart-label y-axis">{{ (maxRevenueValue).toLocaleString() }}</text>
             <text x="35" y="74" class="chart-label y-axis">{{ (maxRevenueValue * 0.5).toLocaleString() }}</text>
             <text x="35" y="124" class="chart-label y-axis">0</text>
+
+            <!-- Transparent interactive column hitboxes for mouse tracking -->
+            <rect
+              v-for="(d, idx) in chartDaysData"
+              :key="'hitbox-' + idx"
+              :x="40 + idx * 70 - 30"
+              y="20"
+              width="60"
+              height="150"
+              fill="transparent"
+              style="cursor: pointer; pointer-events: all;"
+              @mousemove="handleMouseMove($event, idx)"
+              @mouseleave="handleMouseLeave"
+            />
           </svg>
+          
+          <!-- Floating interactive tooltip -->
+          <div 
+            v-if="hoveredData && hoveredDayIdx !== null" 
+            class="chart-tooltip" 
+            :style="{ left: tooltipX + 'px', top: tooltipY + 'px' }"
+          >
+            <div class="tooltip-header">{{ hoveredData.label }} ({{ hoveredData.date }})</div>
+            <div class="tooltip-row">
+              <span class="tooltip-indicator revenue"></span>
+              <span class="tooltip-label">Doanh thu:</span>
+              <span class="tooltip-val">{{ hoveredData.revenue.toLocaleString() }}đ</span>
+            </div>
+            <div class="tooltip-row">
+              <span class="tooltip-indicator warning"></span>
+              <span class="tooltip-label">Cảnh báo:</span>
+              <span class="tooltip-val">{{ hoveredData.warnings }} ca</span>
+            </div>
+          </div>
           
           <div class="chart-legend">
             <span class="legend-item"><span class="legend-color revenue"></span> Doanh thu (VND)</span>
@@ -388,7 +536,7 @@ const getSeverityClass = (severity: string) => {
           <div class="donut-svg-container">
             <svg viewBox="0 0 100 100" class="donut-svg">
               <circle cx="50" cy="50" r="40" fill="transparent" stroke="var(--bg-main)" stroke-width="12" />
-              <!-- Render circular slices -->
+              <!-- Render circular slices with hover events -->
               <circle 
                 v-for="(cat, idx) in warningCategoriesBreakdown" 
                 :key="'slice-' + idx"
@@ -402,10 +550,18 @@ const getSeverityClass = (severity: string) => {
                 :stroke-dashoffset="cat.strokeDashoffset" 
                 transform="rotate(-90 50 50)"
                 class="donut-segment"
+                :class="{ 'dimmed': hoveredDonutIdx !== null && hoveredDonutIdx !== idx }"
+                @mouseenter="hoveredDonutIdx = idx"
+                @mouseleave="hoveredDonutIdx = null"
               />
-              <!-- Donut inner center summary text -->
-              <text x="50" y="47" class="donut-center-title">{{ totalWarningsCount }}</text>
-              <text x="50" y="60" class="donut-center-subtitle">Cảnh báo</text>
+              <!-- Donut inner center summary text with active category details -->
+              <text x="50" y="44" class="donut-center-title">{{ activeDonutCategory ? activeDonutCategory.count : totalWarningsCount }}</text>
+              <text x="50" y="56" class="donut-center-subtitle" :style="{ fill: activeDonutCategory ? activeDonutCategory.color : 'var(--text-muted)' }">
+                {{ activeDonutCategory ? activeDonutCategory.type : 'Cảnh báo' }}
+              </text>
+              <text v-if="activeDonutCategory" x="50" y="68" class="donut-center-percent" :style="{ fill: activeDonutCategory.color }">
+                {{ activeDonutCategory.percent }}%
+              </text>
             </svg>
           </div>
 
@@ -414,6 +570,9 @@ const getSeverityClass = (severity: string) => {
               v-for="(cat, idx) in warningCategoriesBreakdown" 
               :key="'leg-' + idx" 
               class="donut-legend-row"
+              :class="{ 'active': hoveredDonutIdx === idx }"
+              @mouseenter="hoveredDonutIdx = idx"
+              @mouseleave="hoveredDonutIdx = null"
             >
               <span class="legend-bullet" :style="{ backgroundColor: cat.color }"></span>
               <span class="legend-text text-ellipsis">{{ cat.type }}</span>
@@ -840,5 +999,112 @@ const getSeverityClass = (severity: string) => {
   width: 48px;
   height: 48px;
   color: var(--text-muted);
+}
+
+/* Interactive Chart Elements */
+.chart-dot {
+  transition: r 0.2s, stroke-width 0.2s;
+  cursor: pointer;
+}
+.chart-dot:hover {
+  r: 7px;
+}
+.chart-dot.active {
+  filter: drop-shadow(0 2px 8px rgba(99, 102, 241, 0.4));
+}
+
+.chart-label {
+  transition: font-size 0.2s, fill 0.2s;
+}
+.chart-label.active {
+  fill: var(--text-main) !important;
+  font-weight: 800;
+}
+
+/* Tooltip design - premium glassmorphism */
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 10px 14px;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: left 0.1s ease-out, top 0.1s ease-out;
+}
+
+.tooltip-header {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.tooltip-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tooltip-indicator.revenue {
+  background-color: var(--primary-light);
+}
+.tooltip-indicator.warning {
+  background-color: #ef4444;
+}
+
+.tooltip-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tooltip-val {
+  font-weight: 700;
+  color: var(--text-main);
+  margin-left: auto;
+}
+
+/* Donut chart hover styles */
+.donut-segment {
+  transition: stroke-width 0.25s, opacity 0.25s;
+  cursor: pointer;
+}
+.donut-segment.dimmed {
+  opacity: 0.45;
+  stroke-width: 10;
+}
+.donut-segment:hover {
+  stroke-width: 15;
+  opacity: 1;
+}
+
+.donut-center-percent {
+  font-size: 9px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.donut-legend-row {
+  transition: transform 0.2s, background-color 0.2s;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+}
+.donut-legend-row:hover, .donut-legend-row.active {
+  background-color: var(--bg-main);
+  transform: translateX(4px);
 }
 </style>
