@@ -603,6 +603,12 @@ export const ApiService = {
   async getSales(): Promise<Sale[]> {
     return apiGet<Sale[]>('/sales', localMocks.sales)
   },
+  async getWarnings(): Promise<Warning[]> {
+    return apiGet<Warning[]>('/warnings', localMocks.warnings)
+  },
+  async getInteractionWarnings(): Promise<Warning[]> {
+    return apiGet<Warning[]>('/warnings/interactions', localMocks.warnings.filter(w => w.WarningType === 'Tương tác thuốc'))
+  },
 
   // Clinical Safety check endpoint
   async runSafetyCheck(patientId: number, cartItems: { MedicineId: number; Quantity: number; DosageInstruction: string; TimesPerDay: number; Duration: string; AdviceNote: string }[]) {

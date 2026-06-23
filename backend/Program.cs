@@ -465,6 +465,30 @@ app.MapGet("/api/warnings", async (PharmacyDbContext db) =>
     return Results.Ok(warningDtos);
 }).RequireAuthorization();
 
+app.MapGet("/api/warnings/interactions", async (PharmacyDbContext db) =>
+{
+    var dbWarnings = await db.Warnings
+        .Where(w => w.WarningType == "Tương tác thuốc")
+        .OrderByDescending(w => w.CreatedAt)
+        .ToListAsync();
+
+    var warningDtos = dbWarnings.Select(w => new Warning(
+        w.WarningId,
+        w.SafetyCheckId,
+        w.PatientId,
+        w.MedicineId,
+        w.WarningType,
+        w.Severity,
+        w.Message,
+        w.Recommendation,
+        w.IsAcknowledged,
+        w.AcknowledgedBy,
+        w.AcknowledgedAt?.ToString("yyyy-MM-dd HH:mm"),
+        w.Decision
+    ));
+    return Results.Ok(warningDtos);
+}).RequireAuthorization();
+
 // Patient CRUD endpoints
 app.MapPost("/api/patients", async (CreateOrUpdatePatientRequest request, PharmacyDbContext db) =>
 {
