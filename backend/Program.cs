@@ -489,13 +489,51 @@ app.MapPost("/api/sales", (SaleRequest request) =>
     return Results.Ok(newSale);
 }).RequireAuthorization();
 
+// User CRUD endpoints
+app.MapPost("/api/users", (User user) =>
+{
+    var newId = users.Any() ? users.Max(u => u.UserId) + 1 : 1;
+    var passwordHash = string.IsNullOrEmpty(user.PasswordHash) 
+        ? "$2a$11$9Wv6x6T5rD8R1n1W1n1W1uX1qX1qX1qX1qX1qX1qX1qX1qX1qX1qX" 
+        : user.PasswordHash;
+    var newUser = user with { 
+        UserId = newId, 
+        PasswordHash = passwordHash,
+        CreatedAt = DateTime.Now.ToString("yyyy-MM-dd") 
+    };
+    users.Add(newUser);
+    return Results.Ok(newUser);
+}).RequireAuthorization();
+
+app.MapPut("/api/users/{id:int}", (int id, User user) =>
+{
+    var idx = users.FindIndex(u => u.UserId == id);
+    if (idx < 0) return Results.NotFound("User not found");
+    
+    var oldHash = users[idx].PasswordHash;
+    var updatedUser = user with { 
+        UserId = id, 
+        PasswordHash = string.IsNullOrEmpty(user.PasswordHash) ? oldHash : user.PasswordHash 
+    };
+    users[idx] = updatedUser;
+    return Results.Ok(users[idx]);
+}).RequireAuthorization();
+
+app.MapDelete("/api/users/{id:int}", (int id) =>
+{
+    var idx = users.FindIndex(u => u.UserId == id);
+    if (idx < 0) return Results.NotFound("User not found");
+    users.RemoveAt(idx);
+    return Results.Ok(new { success = true });
+}).RequireAuthorization();
+
 app.Run();
 
 // ====================================================
 // DATA RECORDS
 // ====================================================
 
-public record User(int UserId, int RoleId, string FullName, string Email, string? Phone, string Status, string CreatedAt);
+public record User(int UserId, int RoleId, string FullName, string Email, string? Phone, string Status, string CreatedAt, string PasswordHash = "$2a$11$9Wv6x6T5rD8R1n1W1n1W1uX1qX1qX1qX1qX1qX1qX1qX1qX1qX1qX");
 public record Patient(int PatientId, string FullName, string? Phone, string? Gender, string DateOfBirth, decimal? WeightKg, string? Address, bool IsPregnant, bool IsBreastfeeding, string? Note, string CreatedAt);
 public record DrugGroup(int DrugGroupId, string GroupName, string? Description);
 public record ActiveIngredient(int IngredientId, string IngredientName, string? Description);
