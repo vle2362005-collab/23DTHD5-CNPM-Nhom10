@@ -693,6 +693,7 @@ export function usePharmacyStore() {
       drugInteractions.value = await ApiService.getDrugInteractions()
       contraindications.value = await ApiService.getContraindications()
       sales.value = await ApiService.getSales()
+      warnings.value = await ApiService.getWarnings()
     } catch (e) {
       console.error('[Store] Failed to initialize store from API:', e)
     }
