@@ -8,8 +8,14 @@ import SalesHistoryView from '../views/SalesHistoryView.vue'
 import ReportsView from '../views/ReportsView.vue'
 import UsersView from '../views/UsersView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import { usePharmacyStore } from '../store/pharmacy'
 
 const routes = [
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('../views/LoginView.vue')
+  },
   {
     path: '/',
     name: 'dashboard',
@@ -64,6 +70,17 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  const store = usePharmacyStore()
+  if (to.name !== 'login' && !store.isAuthenticated.value) {
+    next({ name: 'login' })
+  } else if (to.name === 'login' && store.isAuthenticated.value) {
+    next({ name: 'dashboard' })
+  } else {
+    next()
+  }
 })
 
 export default router
