@@ -36,7 +36,7 @@ const menuItems = computed<MenuItem[]>(() => [
   {
     id: 'sell-medicine',
     name: 'Bán thuốc an toàn',
-    roles: ['pharmacist']
+    roles: ['admin', 'pharmacist', 'manager']
   },
   {
     id: 'medicines',

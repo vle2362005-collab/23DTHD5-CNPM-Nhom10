@@ -19,9 +19,9 @@ const activeTab = computed(() => {
 
 // Watch role change to check accessibility and redirect if needed
 const roleAllowedTabs: Record<'admin' | 'pharmacist' | 'manager', string[]> = {
-  admin: ['dashboard', 'medicines', 'drug-ingredients-groups', 'patients', 'safety-alerts', 'sales-history', 'users', 'settings'],
+  admin: ['dashboard', 'sell-medicine', 'medicines', 'drug-ingredients-groups', 'patients', 'safety-alerts', 'sales-history', 'users', 'settings'],
   pharmacist: ['dashboard', 'sell-medicine', 'medicines', 'drug-ingredients-groups', 'patients', 'safety-alerts', 'sales-history'],
-  manager: ['dashboard', 'medicines', 'drug-ingredients-groups', 'patients', 'safety-alerts', 'sales-history']
+  manager: ['dashboard', 'sell-medicine', 'medicines', 'drug-ingredients-groups', 'patients', 'safety-alerts', 'sales-history']
 }
 
 watch(currentRole, (newRole) => {
