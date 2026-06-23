@@ -119,4 +119,65 @@ namespace Backend.Models
         [StringLength(500)]
         public string? Description { get; set; }
     }
+
+    [Table("Diseases")]
+    public class DbDisease
+    {
+        [Key]
+        public int DiseaseId { get; set; }
+
+        [Required]
+        [StringLength(150)]
+        public string DiseaseName { get; set; } = string.Empty;
+
+        [StringLength(500)]
+        public string? Description { get; set; }
+    }
+
+    [Table("DrugInteractions")]
+    public class DbDrugInteraction
+    {
+        [Key]
+        public int InteractionId { get; set; }
+
+        public int IngredientAId { get; set; }
+
+        public int IngredientBId { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string Severity { get; set; } = string.Empty;
+
+        [StringLength(1000)]
+        public string? Description { get; set; }
+
+        [StringLength(1000)]
+        public string? Recommendation { get; set; }
+    }
+
+    [Table("Contraindications")]
+    public class DbContraindication
+    {
+        [Key]
+        public int ContraindicationId { get; set; }
+
+        public int? MedicineId { get; set; }
+
+        public int? IngredientId { get; set; }
+
+        public int? DiseaseId { get; set; }
+
+        [StringLength(100)]
+        public string? ConditionType { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string Severity { get; set; } = string.Empty;
+
+        [StringLength(1000)]
+        public string? Description { get; set; }
+
+        [StringLength(1000)]
+        public string? Recommendation { get; set; }
+    }
 }

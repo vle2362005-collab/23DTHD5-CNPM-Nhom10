@@ -397,8 +397,64 @@ export const ApiService = {
   async getDrugInteractions(): Promise<DrugInteraction[]> {
     return apiGet<DrugInteraction[]>('/druginteractions', localMocks.drugInteractions)
   },
+  async createDrugInteraction(interaction: Omit<DrugInteraction, 'InteractionId'>): Promise<DrugInteraction> {
+    return apiPost<DrugInteraction, Omit<DrugInteraction, 'InteractionId'>>('/druginteractions', interaction, () => {
+      const newId = localMocks.drugInteractions.length > 0 ? Math.max(...localMocks.drugInteractions.map(di => di.InteractionId)) + 1 : 1
+      const newDi: DrugInteraction = {
+        ...interaction,
+        InteractionId: newId
+      }
+      localMocks.drugInteractions.push(newDi)
+      return newDi
+    })
+  },
+  async updateDrugInteraction(id: number, interaction: DrugInteraction): Promise<DrugInteraction> {
+    return apiPut<DrugInteraction, DrugInteraction>(`/druginteractions/${id}`, interaction, () => {
+      const idx = localMocks.drugInteractions.findIndex(di => di.InteractionId === id)
+      if (idx >= 0) localMocks.drugInteractions[idx] = interaction
+      return interaction
+    })
+  },
+  async deleteDrugInteraction(id: number): Promise<boolean> {
+    return apiDelete(`/druginteractions/${id}`, () => {
+      const idx = localMocks.drugInteractions.findIndex(di => di.InteractionId === id)
+      if (idx >= 0) {
+        localMocks.drugInteractions.splice(idx, 1)
+        return true
+      }
+      return false
+    })
+  },
   async getContraindications(): Promise<Contraindication[]> {
     return apiGet<Contraindication[]>('/contraindications', localMocks.contraindications)
+  },
+  async createContraindication(contra: Omit<Contraindication, 'ContraindicationId'>): Promise<Contraindication> {
+    return apiPost<Contraindication, Omit<Contraindication, 'ContraindicationId'>>('/contraindications', contra, () => {
+      const newId = localMocks.contraindications.length > 0 ? Math.max(...localMocks.contraindications.map(c => c.ContraindicationId)) + 1 : 1
+      const newContra: Contraindication = {
+        ...contra,
+        ContraindicationId: newId
+      }
+      localMocks.contraindications.push(newContra)
+      return newContra
+    })
+  },
+  async updateContraindication(id: number, contra: Contraindication): Promise<Contraindication> {
+    return apiPut<Contraindication, Contraindication>(`/contraindications/${id}`, contra, () => {
+      const idx = localMocks.contraindications.findIndex(c => c.ContraindicationId === id)
+      if (idx >= 0) localMocks.contraindications[idx] = contra
+      return contra
+    })
+  },
+  async deleteContraindication(id: number): Promise<boolean> {
+    return apiDelete(`/contraindications/${id}`, () => {
+      const idx = localMocks.contraindications.findIndex(c => c.ContraindicationId === id)
+      if (idx >= 0) {
+        localMocks.contraindications.splice(idx, 1)
+        return true
+      }
+      return false
+    })
   },
   async getSales(): Promise<Sale[]> {
     return apiGet<Sale[]>('/sales', localMocks.sales)

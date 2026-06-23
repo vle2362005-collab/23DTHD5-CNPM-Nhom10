@@ -323,11 +323,46 @@ app.MapGet("/api/medicineingredients", async (PharmacyDbContext db) =>
     ));
     return Results.Ok(ingredientDtos);
 }).RequireAuthorization();
-app.MapGet("/api/diseases", () => Results.Ok(diseases)).RequireAuthorization();
+app.MapGet("/api/diseases", async (PharmacyDbContext db) =>
+{
+    var dbDiseases = await db.Diseases.ToListAsync();
+    var diseaseDtos = dbDiseases.Select(d => new Disease(
+        d.DiseaseId,
+        d.DiseaseName,
+        d.Description
+    ));
+    return Results.Ok(diseaseDtos);
+}).RequireAuthorization();
 app.MapGet("/api/patientdiseases", () => Results.Ok(patientDiseases)).RequireAuthorization();
 app.MapGet("/api/patientallergies", () => Results.Ok(patientAllergies)).RequireAuthorization();
-app.MapGet("/api/druginteractions", () => Results.Ok(drugInteractions)).RequireAuthorization();
-app.MapGet("/api/contraindications", () => Results.Ok(contraindications)).RequireAuthorization();
+app.MapGet("/api/druginteractions", async (PharmacyDbContext db) =>
+{
+    var dbInteractions = await db.DrugInteractions.ToListAsync();
+    var interactionDtos = dbInteractions.Select(di => new DrugInteraction(
+        di.InteractionId,
+        di.IngredientAId,
+        di.IngredientBId,
+        di.Severity,
+        di.Description,
+        di.Recommendation
+    ));
+    return Results.Ok(interactionDtos);
+}).RequireAuthorization();
+app.MapGet("/api/contraindications", async (PharmacyDbContext db) =>
+{
+    var dbContraindications = await db.Contraindications.ToListAsync();
+    var contraDtos = dbContraindications.Select(c => new Contraindication(
+        c.ContraindicationId,
+        c.MedicineId,
+        c.IngredientId,
+        c.DiseaseId,
+        c.ConditionType ?? string.Empty,
+        c.Severity,
+        c.Description,
+        c.Recommendation
+    ));
+    return Results.Ok(contraDtos);
+}).RequireAuthorization();
 app.MapGet("/api/sales", () => Results.Ok(sales)).RequireAuthorization();
 app.MapGet("/api/saledetails", () => Results.Ok(saleDetails)).RequireAuthorization();
 app.MapGet("/api/warnings", () => Results.Ok(warnings)).RequireAuthorization();
@@ -569,7 +604,7 @@ app.MapDelete("/api/ingredients/{id:int}", async (int id, PharmacyDbContext db) 
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 // Safety Check Endpoint
-app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
+app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbContext db) =>
 {
     var generatedWarnings = new List<Warning>();
     var patient = patients.FirstOrDefault(p => p.PatientId == request.PatientId);
@@ -577,14 +612,21 @@ app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
 
     var checkId = Random.Shared.Next(1, 1000);
 
+    var dbMedicines = await db.Medicines.ToListAsync();
+    var dbIngredients = await db.ActiveIngredients.ToListAsync();
+    var dbMedicineIngredients = await db.MedicineIngredients.ToListAsync();
+    var dbInteractions = await db.DrugInteractions.ToListAsync();
+    var dbContraindications = await db.Contraindications.ToListAsync();
+    var dbDiseases = await db.Diseases.ToListAsync();
+
     // Extract ingredients from cart items
     var cartIngredients = new List<(int medicineId, int ingredientId, string ingredientName)>();
     foreach (var item in request.CartItems)
     {
-        var medIngredients = medicineIngredients.Where(mi => mi.MedicineId == item.MedicineId);
+        var medIngredients = dbMedicineIngredients.Where(mi => mi.MedicineId == item.MedicineId);
         foreach (var mi in medIngredients)
         {
-            var ingName = activeIngredients.FirstOrDefault(ai => ai.IngredientId == mi.IngredientId)?.IngredientName ?? "";
+            var ingName = dbIngredients.FirstOrDefault(ai => ai.IngredientId == mi.IngredientId)?.IngredientName ?? "";
             cartIngredients.Add((item.MedicineId, mi.IngredientId, ingName));
         }
     }
@@ -596,7 +638,7 @@ app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
         var matchIng = patientAllergiesData.FirstOrDefault(pa => pa.IngredientId == cartIng.ingredientId);
         if (matchIng != null)
         {
-            var medName = medicines.FirstOrDefault(m => m.MedicineId == cartIng.medicineId)?.MedicineName ?? "";
+            var medName = dbMedicines.FirstOrDefault(m => m.MedicineId == cartIng.medicineId)?.MedicineName ?? "";
             generatedWarnings.Add(new Warning(
                 Random.Shared.Next(1000, 10000),
                 checkId,
@@ -622,15 +664,15 @@ app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
             var ingA = cartIngredients[i];
             var ingB = cartIngredients[j];
 
-            var interact = drugInteractions.FirstOrDefault(di =>
+            var interact = dbInteractions.FirstOrDefault(di =>
                 (di.IngredientAId == ingA.ingredientId && di.IngredientBId == ingB.ingredientId) ||
                 (di.IngredientAId == ingB.ingredientId && di.IngredientBId == ingA.ingredientId)
             );
 
             if (interact != null)
             {
-                var medAName = medicines.FirstOrDefault(m => m.MedicineId == ingA.medicineId)?.MedicineName ?? "";
-                var medBName = medicines.FirstOrDefault(m => m.MedicineId == ingB.medicineId)?.MedicineName ?? "";
+                var medAName = dbMedicines.FirstOrDefault(m => m.MedicineId == ingA.medicineId)?.MedicineName ?? "";
+                var medBName = dbMedicines.FirstOrDefault(m => m.MedicineId == ingB.medicineId)?.MedicineName ?? "";
 
                 generatedWarnings.Add(new Warning(
                     Random.Shared.Next(1000, 10000),
@@ -656,15 +698,15 @@ app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
     {
         foreach (var pDisease in patientDiseasesData)
         {
-            var contra = contraindications.FirstOrDefault(c =>
+            var contra = dbContraindications.FirstOrDefault(c =>
                 c.DiseaseId == pDisease.DiseaseId &&
                 (c.IngredientId == cartIng.ingredientId || c.MedicineId == cartIng.medicineId)
             );
 
             if (contra != null)
             {
-                var disName = diseases.FirstOrDefault(d => d.DiseaseId == pDisease.DiseaseId)?.DiseaseName ?? "";
-                var medName = medicines.FirstOrDefault(m => m.MedicineId == cartIng.medicineId)?.MedicineName ?? "";
+                var disName = dbDiseases.FirstOrDefault(d => d.DiseaseId == pDisease.DiseaseId)?.DiseaseName ?? "";
+                var medName = dbMedicines.FirstOrDefault(m => m.MedicineId == cartIng.medicineId)?.MedicineName ?? "";
 
                 generatedWarnings.Add(new Warning(
                     Random.Shared.Next(1000, 10000),
@@ -685,14 +727,14 @@ app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
 
         if (patient.IsPregnant)
         {
-            var pregContra = contraindications.FirstOrDefault(c =>
+            var pregContra = dbContraindications.FirstOrDefault(c =>
                 c.ConditionType == "Đối tượng đặc biệt" &&
                 (c.MedicineId == cartIng.medicineId || c.IngredientId == cartIng.ingredientId)
             );
 
             if (pregContra != null)
             {
-                var medName = medicines.FirstOrDefault(m => m.MedicineId == cartIng.medicineId)?.MedicineName ?? "";
+                var medName = dbMedicines.FirstOrDefault(m => m.MedicineId == cartIng.medicineId)?.MedicineName ?? "";
                 generatedWarnings.Add(new Warning(
                     Random.Shared.Next(1000, 10000),
                     checkId,
@@ -714,7 +756,7 @@ app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
     // 4. Prescription Required check
     foreach (var item in request.CartItems)
     {
-        var med = medicines.FirstOrDefault(m => m.MedicineId == item.MedicineId);
+        var med = dbMedicines.FirstOrDefault(m => m.MedicineId == item.MedicineId);
         if (med != null && med.RequiresPrescription)
         {
             generatedWarnings.Add(new Warning(
@@ -738,6 +780,168 @@ app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
     var result = generatedWarnings.Count > 0 ? "Warning" : "Approved";
     return Results.Ok(new { warnings = generatedWarnings, highestSeverity, result });
 }).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
+
+// Drug Interactions CRUD endpoints
+app.MapPost("/api/druginteractions", async (DrugInteractionRequest request, PharmacyDbContext db) =>
+{
+    if (request.IngredientAId == request.IngredientBId)
+    {
+        return Results.BadRequest("Hoạt chất A và Hoạt chất B không được trùng nhau.");
+    }
+    
+    var hasA = await db.ActiveIngredients.AnyAsync(ai => ai.IngredientId == request.IngredientAId);
+    var hasB = await db.ActiveIngredients.AnyAsync(ai => ai.IngredientId == request.IngredientBId);
+    if (!hasA || !hasB)
+    {
+        return Results.BadRequest("Hoạt chất chỉ định không tồn tại.");
+    }
+
+    var dbInteraction = new DbDrugInteraction
+    {
+        IngredientAId = request.IngredientAId,
+        IngredientBId = request.IngredientBId,
+        Severity = request.Severity,
+        Description = request.Description,
+        Recommendation = request.Recommendation
+    };
+    db.DrugInteractions.Add(dbInteraction);
+    await db.SaveChangesAsync();
+    return Results.Ok(new DrugInteraction(
+        dbInteraction.InteractionId,
+        dbInteraction.IngredientAId,
+        dbInteraction.IngredientBId,
+        dbInteraction.Severity,
+        dbInteraction.Description,
+        dbInteraction.Recommendation
+    ));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapPut("/api/druginteractions/{id:int}", async (int id, DrugInteractionRequest request, PharmacyDbContext db) =>
+{
+    if (request.IngredientAId == request.IngredientBId)
+    {
+        return Results.BadRequest("Hoạt chất A và Hoạt chất B không được trùng nhau.");
+    }
+
+    var hasA = await db.ActiveIngredients.AnyAsync(ai => ai.IngredientId == request.IngredientAId);
+    var hasB = await db.ActiveIngredients.AnyAsync(ai => ai.IngredientId == request.IngredientBId);
+    if (!hasA || !hasB)
+    {
+        return Results.BadRequest("Hoạt chất chỉ định không tồn tại.");
+    }
+
+    var dbInteraction = await db.DrugInteractions.FindAsync(id);
+    if (dbInteraction == null) return Results.NotFound("Không tìm thấy thông tin tương tác thuốc.");
+
+    dbInteraction.IngredientAId = request.IngredientAId;
+    dbInteraction.IngredientBId = request.IngredientBId;
+    dbInteraction.Severity = request.Severity;
+    dbInteraction.Description = request.Description;
+    dbInteraction.Recommendation = request.Recommendation;
+
+    await db.SaveChangesAsync();
+    return Results.Ok(new DrugInteraction(
+        dbInteraction.InteractionId,
+        dbInteraction.IngredientAId,
+        dbInteraction.IngredientBId,
+        dbInteraction.Severity,
+        dbInteraction.Description,
+        dbInteraction.Recommendation
+    ));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapDelete("/api/druginteractions/{id:int}", async (int id, PharmacyDbContext db) =>
+{
+    var dbInteraction = await db.DrugInteractions.FindAsync(id);
+    if (dbInteraction == null) return Results.NotFound("Không tìm thấy thông tin tương tác thuốc.");
+
+    db.DrugInteractions.Remove(dbInteraction);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { success = true });
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+// Contraindications CRUD endpoints
+app.MapPost("/api/contraindications", async (ContraindicationRequest request, PharmacyDbContext db) =>
+{
+    if (request.MedicineId == null && request.IngredientId == null)
+    {
+        return Results.BadRequest("Chống chỉ định phải liên kết với ít nhất một Thuốc hoặc Hoạt chất.");
+    }
+
+    if (request.DiseaseId == null && request.ConditionType != "Đối tượng đặc biệt")
+    {
+        return Results.BadRequest("Chống chỉ định phải liên kết với Bệnh nền hoặc là Đối tượng đặc biệt.");
+    }
+
+    var dbContra = new DbContraindication
+    {
+        MedicineId = request.MedicineId,
+        IngredientId = request.IngredientId,
+        DiseaseId = request.DiseaseId,
+        ConditionType = request.ConditionType,
+        Severity = request.Severity,
+        Description = request.Description,
+        Recommendation = request.Recommendation
+    };
+    db.Contraindications.Add(dbContra);
+    await db.SaveChangesAsync();
+    return Results.Ok(new Contraindication(
+        dbContra.ContraindicationId,
+        dbContra.MedicineId,
+        dbContra.IngredientId,
+        dbContra.DiseaseId,
+        dbContra.ConditionType ?? string.Empty,
+        dbContra.Severity,
+        dbContra.Description,
+        dbContra.Recommendation
+    ));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapPut("/api/contraindications/{id:int}", async (int id, ContraindicationRequest request, PharmacyDbContext db) =>
+{
+    if (request.MedicineId == null && request.IngredientId == null)
+    {
+        return Results.BadRequest("Chống chỉ định phải liên kết với ít nhất một Thuốc hoặc Hoạt chất.");
+    }
+
+    if (request.DiseaseId == null && request.ConditionType != "Đối tượng đặc biệt")
+    {
+        return Results.BadRequest("Chống chỉ định phải liên kết với Bệnh nền hoặc là Đối tượng đặc biệt.");
+    }
+
+    var dbContra = await db.Contraindications.FindAsync(id);
+    if (dbContra == null) return Results.NotFound("Không tìm thấy thông tin chống chỉ định.");
+
+    dbContra.MedicineId = request.MedicineId;
+    dbContra.IngredientId = request.IngredientId;
+    dbContra.DiseaseId = request.DiseaseId;
+    dbContra.ConditionType = request.ConditionType;
+    dbContra.Severity = request.Severity;
+    dbContra.Description = request.Description;
+    dbContra.Recommendation = request.Recommendation;
+
+    await db.SaveChangesAsync();
+    return Results.Ok(new Contraindication(
+        dbContra.ContraindicationId,
+        dbContra.MedicineId,
+        dbContra.IngredientId,
+        dbContra.DiseaseId,
+        dbContra.ConditionType ?? string.Empty,
+        dbContra.Severity,
+        dbContra.Description,
+        dbContra.Recommendation
+    ));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapDelete("/api/contraindications/{id:int}", async (int id, PharmacyDbContext db) =>
+{
+    var dbContra = await db.Contraindications.FindAsync(id);
+    if (dbContra == null) return Results.NotFound("Không tìm thấy thông tin chống chỉ định.");
+
+    db.Contraindications.Remove(dbContra);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { success = true });
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 // Create Sale Endpoint
 app.MapPost("/api/sales", (SaleRequest request) =>
@@ -915,3 +1119,5 @@ public record MedicineRequest(
 public record MedicineIngredientDto(int IngredientId, string? Amount);
 public record DrugGroupRequest(string GroupName, string? Description);
 public record ActiveIngredientRequest(string IngredientName, string? Description);
+public record DrugInteractionRequest(int IngredientAId, int IngredientBId, string Severity, string? Description, string? Recommendation);
+public record ContraindicationRequest(int? MedicineId, int? IngredientId, int? DiseaseId, string? ConditionType, string Severity, string? Description, string? Recommendation);
