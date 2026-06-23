@@ -1057,6 +1057,7 @@ app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbCo
         {
             var ingA = cartIngredients[i];
             var ingB = cartIngredients[j];
+            if (ingA.medicineId == ingB.medicineId) continue;
 
             var interact = dbInteractions.FirstOrDefault(di =>
                 (di.IngredientAId == ingA.ingredientId && di.IngredientBId == ingB.ingredientId) ||

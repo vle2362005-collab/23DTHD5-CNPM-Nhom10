@@ -134,6 +134,7 @@ const precheckAlerts = computed(() => {
 
   // 2. Check Interactions with current cart items
   store.prescriptionCart.value.forEach(item => {
+    if (item.medicine.MedicineId === currentMed.MedicineId) return
     const medIngredientsA = store.medicineIngredients.value.filter(mi => mi.MedicineId === currentMed.MedicineId)
     const medIngredientsB = store.medicineIngredients.value.filter(mi => mi.MedicineId === item.medicine.MedicineId)
 
