@@ -18,6 +18,10 @@ namespace Backend.Data
         public DbSet<DbDisease> Diseases { get; set; } = null!;
         public DbSet<DbDrugInteraction> DrugInteractions { get; set; } = null!;
         public DbSet<DbContraindication> Contraindications { get; set; } = null!;
+        public DbSet<DbSale> Sales { get; set; } = null!;
+        public DbSet<DbSaleDetail> SaleDetails { get; set; } = null!;
+        public DbSet<DbSafetyCheck> SafetyChecks { get; set; } = null!;
+        public DbSet<DbWarning> Warnings { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

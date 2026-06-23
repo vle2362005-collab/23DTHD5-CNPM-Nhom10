@@ -180,4 +180,120 @@ namespace Backend.Models
         [StringLength(1000)]
         public string? Recommendation { get; set; }
     }
+
+    [Table("Sales")]
+    public class DbSale
+    {
+        [Key]
+        public int SaleId { get; set; }
+
+        public int PatientId { get; set; }
+
+        public int PharmacistId { get; set; }
+
+        public int? PrescriptionId { get; set; }
+
+        public DateTime SaleDate { get; set; } = DateTime.Now;
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal TotalAmount { get; set; } = 0;
+
+        [Required]
+        [StringLength(50)]
+        public string FinalDecision { get; set; } = "Pending";
+
+        [Required]
+        [StringLength(50)]
+        public string Status { get; set; } = "Pending";
+
+        [StringLength(500)]
+        public string? Note { get; set; }
+    }
+
+    [Table("SaleDetails")]
+    public class DbSaleDetail
+    {
+        [Key]
+        public int SaleDetailId { get; set; }
+
+        public int SaleId { get; set; }
+
+        public int MedicineId { get; set; }
+
+        public int Quantity { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal UnitPrice { get; set; }
+
+        [StringLength(500)]
+        public string? DosageInstruction { get; set; }
+
+        public int? TimesPerDay { get; set; }
+
+        [StringLength(100)]
+        public string? Duration { get; set; }
+
+        [StringLength(500)]
+        public string? AdviceNote { get; set; }
+    }
+
+    [Table("SafetyChecks")]
+    public class DbSafetyCheck
+    {
+        [Key]
+        public int SafetyCheckId { get; set; }
+
+        public int SaleId { get; set; }
+
+        public DateTime CheckedAt { get; set; } = DateTime.Now;
+
+        [StringLength(50)]
+        public string? HighestSeverity { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string Result { get; set; } = "Approved";
+
+        [StringLength(500)]
+        public string? Recommendation { get; set; }
+    }
+
+    [Table("Warnings")]
+    public class DbWarning
+    {
+        [Key]
+        public int WarningId { get; set; }
+
+        public int SafetyCheckId { get; set; }
+
+        public int PatientId { get; set; }
+
+        public int? MedicineId { get; set; }
+
+        [Required]
+        [StringLength(100)]
+        public string WarningType { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(50)]
+        public string Severity { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(1000)]
+        public string Message { get; set; } = string.Empty;
+
+        [StringLength(1000)]
+        public string? Recommendation { get; set; }
+
+        public bool IsAcknowledged { get; set; } = false;
+
+        public int? AcknowledgedBy { get; set; }
+
+        public DateTime? AcknowledgedAt { get; set; }
+
+        [StringLength(50)]
+        public string? Decision { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+    }
 }
