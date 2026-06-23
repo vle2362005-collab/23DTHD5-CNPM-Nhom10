@@ -363,9 +363,59 @@ app.MapGet("/api/contraindications", async (PharmacyDbContext db) =>
     ));
     return Results.Ok(contraDtos);
 }).RequireAuthorization();
-app.MapGet("/api/sales", () => Results.Ok(sales)).RequireAuthorization();
-app.MapGet("/api/saledetails", () => Results.Ok(saleDetails)).RequireAuthorization();
-app.MapGet("/api/warnings", () => Results.Ok(warnings)).RequireAuthorization();
+app.MapGet("/api/sales", async (PharmacyDbContext db) =>
+{
+    var dbSales = await db.Sales.OrderByDescending(s => s.SaleDate).ToListAsync();
+    var saleDtos = dbSales.Select(s => new Sale(
+        s.SaleId,
+        s.PatientId,
+        s.PharmacistId,
+        s.PrescriptionId,
+        s.SaleDate.ToString("yyyy-MM-dd HH:mm"),
+        s.TotalAmount,
+        s.FinalDecision == "Approved" ? "Approved" : (s.FinalDecision == "Denied" ? "Denied" : "Pending"),
+        s.Status == "Completed" ? "Completed" : (s.Status == "Cancelled" ? "Cancelled" : "Pending"),
+        s.Note
+    ));
+    return Results.Ok(saleDtos);
+}).RequireAuthorization();
+
+app.MapGet("/api/saledetails", async (PharmacyDbContext db) =>
+{
+    var dbDetails = await db.SaleDetails.ToListAsync();
+    var detailDtos = dbDetails.Select(sd => new SaleDetail(
+        sd.SaleDetailId,
+        sd.SaleId,
+        sd.MedicineId,
+        sd.Quantity,
+        sd.UnitPrice,
+        sd.DosageInstruction ?? string.Empty,
+        sd.TimesPerDay ?? 1,
+        sd.Duration,
+        sd.AdviceNote
+    ));
+    return Results.Ok(detailDtos);
+}).RequireAuthorization();
+
+app.MapGet("/api/warnings", async (PharmacyDbContext db) =>
+{
+    var dbWarnings = await db.Warnings.OrderByDescending(w => w.CreatedAt).ToListAsync();
+    var warningDtos = dbWarnings.Select(w => new Warning(
+        w.WarningId,
+        w.SafetyCheckId,
+        w.PatientId,
+        w.MedicineId,
+        w.WarningType,
+        w.Severity,
+        w.Message,
+        w.Recommendation,
+        w.IsAcknowledged,
+        w.AcknowledgedBy,
+        w.AcknowledgedAt?.ToString("yyyy-MM-dd HH:mm"),
+        w.Decision
+    ));
+    return Results.Ok(warningDtos);
+}).RequireAuthorization();
 
 // Patient CRUD endpoints
 app.MapPost("/api/patients", (Patient patient) =>
@@ -943,13 +993,11 @@ app.MapDelete("/api/contraindications/{id:int}", async (int id, PharmacyDbContex
     return Results.Ok(new { success = true });
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
-// Create Sale Endpoint
-app.MapPost("/api/sales", (SaleRequest request) =>
+app.MapPost("/api/sales", async (SaleRequest request, PharmacyDbContext db) =>
 {
-    var newSaleId = sales.Count + 1;
     var totalAmount = request.CartItems.Sum(item =>
     {
-        var price = medicines.FirstOrDefault(m => m.MedicineId == item.MedicineId)?.Price ?? 0;
+        var price = db.Medicines.FirstOrDefault(m => m.MedicineId == item.MedicineId)?.Price ?? 0;
         return price * item.Quantity;
     });
 
@@ -958,48 +1006,103 @@ app.MapPost("/api/sales", (SaleRequest request) =>
         ? "Bán sau khi duyệt cảnh báo. " + request.Note
         : "Bán an toàn thông thường. " + request.Note;
 
-    var newSale = new Sale(
-        newSaleId,
-        request.PatientId,
-        2, // Ds. Trần Thị Mai
-        null,
-        DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
-        totalAmount,
-        request.FinalDecision,
-        request.FinalDecision == "Denied" ? "Cancelled" : "Completed",
-        note
-    );
+    var dbSale = new DbSale
+    {
+        PatientId = request.PatientId,
+        PharmacistId = 2, // Ds. Trần Thị Mai
+        PrescriptionId = null,
+        SaleDate = DateTime.Now,
+        TotalAmount = totalAmount,
+        FinalDecision = request.FinalDecision,
+        Status = request.FinalDecision == "Denied" ? "Cancelled" : "Completed",
+        Note = note
+    };
 
-    sales.Insert(0, newSale);
+    db.Sales.Add(dbSale);
+    await db.SaveChangesAsync();
 
     foreach (var item in request.CartItems)
     {
-        var price = medicines.FirstOrDefault(m => m.MedicineId == item.MedicineId)?.Price ?? 0;
-        var detail = new SaleDetail(
-            saleDetails.Count + 1,
-            newSaleId,
-            item.MedicineId,
-            item.Quantity,
-            price,
-            item.DosageInstruction,
-            item.TimesPerDay,
-            item.Duration,
-            item.AdviceNote
-        );
-        saleDetails.Add(detail);
+        var price = db.Medicines.FirstOrDefault(m => m.MedicineId == item.MedicineId)?.Price ?? 0;
+        var dbDetail = new DbSaleDetail
+        {
+            SaleId = dbSale.SaleId,
+            MedicineId = item.MedicineId,
+            Quantity = item.Quantity,
+            UnitPrice = price,
+            DosageInstruction = item.DosageInstruction,
+            TimesPerDay = item.TimesPerDay,
+            Duration = item.Duration,
+            AdviceNote = item.AdviceNote
+        };
+        db.SaleDetails.Add(dbDetail);
     }
+    await db.SaveChangesAsync();
 
-    if (request.Warnings != null)
+    if (hasWarnings && request.Warnings != null)
     {
+        var highestSeverity = request.Warnings.Count > 0 ? "Medium" : "None";
+        var dbCheck = new DbSafetyCheck
+        {
+            SaleId = dbSale.SaleId,
+            CheckedAt = DateTime.Now,
+            HighestSeverity = highestSeverity,
+            Result = request.FinalDecision == "Denied" ? "Warning" : "Approved",
+            Recommendation = "Quyết định lâm sàng từ dược sĩ: " + request.FinalDecision
+        };
+        db.SafetyChecks.Add(dbCheck);
+        await db.SaveChangesAsync();
+
         foreach (var w in request.Warnings)
         {
-            var warningWithId = w with { WarningId = warnings.Count + 1 };
-            warnings.Insert(0, warningWithId);
+            var dbWarning = new DbWarning
+            {
+                SafetyCheckId = dbCheck.SafetyCheckId,
+                PatientId = request.PatientId,
+                MedicineId = w.MedicineId,
+                WarningType = w.WarningType,
+                Severity = w.Severity,
+                Message = w.Message,
+                Recommendation = w.Recommendation,
+                IsAcknowledged = w.IsAcknowledged,
+                AcknowledgedBy = w.AcknowledgedBy,
+                AcknowledgedAt = w.AcknowledgedAt != null ? DateTime.Parse(w.AcknowledgedAt) : null,
+                Decision = w.Decision,
+                CreatedAt = DateTime.Now
+            };
+            db.Warnings.Add(dbWarning);
         }
+        await db.SaveChangesAsync();
     }
 
-    return Results.Ok(newSale);
+    var saleDto = new Sale(
+        dbSale.SaleId,
+        dbSale.PatientId,
+        dbSale.PharmacistId,
+        dbSale.PrescriptionId,
+        dbSale.SaleDate.ToString("yyyy-MM-dd HH:mm"),
+        dbSale.TotalAmount,
+        dbSale.FinalDecision == "Approved" ? "Approved" : (dbSale.FinalDecision == "Denied" ? "Denied" : "Pending"),
+        dbSale.Status == "Completed" ? "Completed" : (dbSale.Status == "Cancelled" ? "Cancelled" : "Pending"),
+        dbSale.Note
+    );
+
+    return Results.Ok(saleDto);
 }).RequireAuthorization(policy => policy.RequireRole("pharmacist"));
+
+app.MapPut("/api/warnings/{id:int}/acknowledge", async (int id, AcknowledgeWarningRequest request, PharmacyDbContext db) =>
+{
+    var dbWarning = await db.Warnings.FindAsync(id);
+    if (dbWarning == null) return Results.NotFound("Không tìm thấy cảnh báo.");
+
+    dbWarning.IsAcknowledged = true;
+    dbWarning.AcknowledgedBy = request.AcknowledgedBy;
+    dbWarning.AcknowledgedAt = DateTime.Now;
+    dbWarning.Decision = request.Decision;
+
+    await db.SaveChangesAsync();
+    return Results.Ok(new { success = true });
+}).RequireAuthorization();
 
 // User CRUD endpoints
 app.MapPost("/api/users", async (User userDto, PharmacyDbContext db) =>
@@ -1121,3 +1224,4 @@ public record DrugGroupRequest(string GroupName, string? Description);
 public record ActiveIngredientRequest(string IngredientName, string? Description);
 public record DrugInteractionRequest(int IngredientAId, int IngredientBId, string Severity, string? Description, string? Recommendation);
 public record ContraindicationRequest(int? MedicineId, int? IngredientId, int? DiseaseId, string? ConditionType, string Severity, string? Description, string? Recommendation);
+public record AcknowledgeWarningRequest(int AcknowledgedBy, string Decision);
