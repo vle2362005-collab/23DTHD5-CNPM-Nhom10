@@ -669,6 +669,30 @@ export const ApiService = {
         }
       })
 
+      // Direct brand/medicine level allergies
+      cartItems.forEach(item => {
+        const matchMed = patientAllergiesData.find(pa => pa.MedicineId === item.MedicineId)
+        if (matchMed) {
+          const medName = localMocks.medicines.find(m => m.MedicineId === item.MedicineId)?.MedicineName || ''
+          if (!generatedWarnings.some(w => w.MedicineId === item.MedicineId && w.WarningType === 'Dị ứng thuốc' && w.Message.includes('biệt dược'))) {
+            generatedWarnings.push({
+              WarningId: Math.floor(Math.random() * 10000),
+              SafetyCheckId: checkId,
+              PatientId: patientId,
+              MedicineId: item.MedicineId,
+              WarningType: 'Dị ứng thuốc',
+              Severity: matchMed.Severity || 'Nghiêm trọng',
+              Message: `Bệnh nhân dị ứng trực tiếp với biệt dược [${medName}].`,
+              Recommendation: `Ngay lập tức thay thế thuốc [${medName}] bằng một thuốc khác tương đương không gây dị ứng.`,
+              IsAcknowledged: false,
+              AcknowledgedBy: null,
+              AcknowledgedAt: null,
+              Decision: null
+            })
+          }
+        }
+      })
+
       // 2. Drug Interactions Check
       for (let i = 0; i < cartIngredients.length; i++) {
         for (let j = i + 1; j < cartIngredients.length; j++) {
