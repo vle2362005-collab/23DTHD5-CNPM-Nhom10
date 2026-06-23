@@ -428,6 +428,13 @@ export const ApiService = {
   async getSales(): Promise<Sale[]> {
     return apiGet<Sale[]>('/sales', localMocks.sales)
   },
+  async getWarnings(warningType?: string): Promise<Warning[]> {
+    const url = warningType ? `/warnings?warningType=${encodeURIComponent(warningType)}` : '/warnings'
+    const fallback = warningType 
+      ? localMocks.warnings.filter(w => w.WarningType.includes(warningType))
+      : localMocks.warnings
+    return apiGet<Warning[]>(url, fallback)
+  },
 
   // Clinical Safety check endpoint
   async runSafetyCheck(patientId: number, cartItems: { MedicineId: number; Quantity: number; DosageInstruction: string; TimesPerDay: number; Duration: string; AdviceNote: string }[]) {

@@ -374,6 +374,21 @@ app.MapDelete("/api/contraindications/{id:int}", async (int id, PharmacySafetyCo
 app.MapGet("/api/sales", async (PharmacySafetyContext context) =>
     await context.Sales.OrderByDescending(s => s.SaleId).ToListAsync());
 
+// --- Warnings list ---
+app.MapGet("/api/warnings", async (string? warningType, PharmacySafetyContext context) =>
+{
+    if (string.IsNullOrWhiteSpace(warningType))
+    {
+        return Results.Ok(await context.Warnings.OrderByDescending(w => w.WarningId).ToListAsync());
+    }
+    var term = warningType.Trim();
+    var matched = await context.Warnings
+        .Where(w => w.WarningType.Contains(term))
+        .OrderByDescending(w => w.WarningId)
+        .ToListAsync();
+    return Results.Ok(matched);
+});
+
 // --- Clinical Safety Check Engine ---
 app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacySafetyContext context) =>
 {
