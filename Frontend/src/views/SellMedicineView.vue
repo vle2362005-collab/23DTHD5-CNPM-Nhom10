@@ -193,6 +193,107 @@ const simulateOCRScan = () => {
     alert('✓ Đã quét đơn thuốc mẫu thành công! Hệ thống tự động thêm 2 loại thuốc vào giỏ hàng và thiết lập liều dùng.')
   }, 1500)
 }
+
+// Quick Edit Patient Medical Info (Allergies & Diseases)
+const showQuickEditMedicalModal = ref(false)
+const quickAllergies = ref<{ isIngredient: boolean; targetId: number; severity: string; note: string }[]>([])
+const quickDiseases = ref<{ diseaseId: number; note: string }[]>([])
+
+const canManageMedical = computed(() => {
+  return store.currentRole.value === 'admin' || store.currentRole.value === 'manager' || store.currentRole.value === 'pharmacist'
+})
+
+const openQuickEditMedicalModal = () => {
+  const activePat = store.activePatient.value
+  if (!activePat) return
+
+  // Load existing allergies
+  const allergies = store.patientAllergies.value
+    .filter(pa => pa.PatientId === activePat.PatientId)
+    .map(pa => ({
+      isIngredient: !!pa.IngredientId,
+      targetId: pa.IngredientId || pa.MedicineId || 0,
+      severity: pa.Severity || 'Nghiêm trọng',
+      note: pa.AllergyNote || ''
+    }))
+  quickAllergies.value = allergies
+
+  // Load existing diseases
+  const diseases = store.patientDiseases.value
+    .filter(pd => pd.PatientId === activePat.PatientId)
+    .map(pd => ({
+      diseaseId: pd.DiseaseId,
+      note: pd.Note || ''
+    }))
+  quickDiseases.value = diseases
+
+  showQuickEditMedicalModal.value = true
+}
+
+const addQuickAllergyRow = () => {
+  const firstIng = store.activeIngredients.value[0]
+  if (!firstIng) return
+  quickAllergies.value.push({
+    isIngredient: true,
+    targetId: firstIng.IngredientId,
+    severity: 'Nghiêm trọng',
+    note: ''
+  })
+}
+
+const removeQuickAllergyRow = (idx: number) => {
+  quickAllergies.value.splice(idx, 1)
+}
+
+const toggleQuickAllergyType = (idx: number) => {
+  const row = quickAllergies.value[idx]
+  if (!row) return
+  row.isIngredient = !row.isIngredient
+  if (row.isIngredient) {
+    row.targetId = store.activeIngredients.value[0]?.IngredientId || 0
+  } else {
+    row.targetId = store.medicines.value[0]?.MedicineId || 0
+  }
+}
+
+const addQuickDiseaseRow = () => {
+  const firstDis = store.diseases.value[0]
+  if (!firstDis) return
+  quickDiseases.value.push({
+    diseaseId: firstDis.DiseaseId,
+    note: ''
+  })
+}
+
+const removeQuickDiseaseRow = (idx: number) => {
+  quickDiseases.value.splice(idx, 1)
+}
+
+const saveQuickMedicalInfo = async () => {
+  const activePat = store.activePatient.value
+  if (!activePat) return
+
+  try {
+    await store.updatePatient(
+      activePat.PatientId,
+      activePat,
+      quickAllergies.value.map(qa => ({
+        isIngredient: qa.isIngredient,
+        targetId: qa.targetId,
+        severity: qa.severity,
+        note: qa.note
+      })),
+      quickDiseases.value.map(qd => ({
+        diseaseId: qd.diseaseId,
+        note: qd.note
+      }))
+    )
+    showQuickEditMedicalModal.value = false
+    alert('Đã cập nhật thông tin dị ứng và bệnh lý nền thành công!')
+  } catch (err: any) {
+    alert(err.message || 'Lỗi khi cập nhật thông tin!')
+  }
+}
 </script>
 
 <template>
@@ -301,6 +402,13 @@ const simulateOCRScan = () => {
               </span>
             </div>
             <span v-else class="empty-text">Không có bệnh nền</span>
+          </div>
+
+          <!-- Quick Edit Button -->
+          <div style="margin-top: 16px; display: flex; justify-content: flex-end;" v-if="canManageMedical">
+            <button class="add-row-btn" @click="openQuickEditMedicalModal" style="padding: 6px 12px; font-size: 12.5px;">
+              ✎ Cập nhật dị ứng & bệnh nền
+            </button>
           </div>
         </div>
       </div>
@@ -574,6 +682,115 @@ const simulateOCRScan = () => {
           >
             {{ store.finalDecision.value === 'Pending' ? 'Cần xác nhận các cảnh báo để bán' : 'Hoàn tất & Xuất hóa đơn' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      MODAL 2: QUICK EDIT MEDICAL DETAILS (ALLERGIES & DISEASES)
+    ========================================== -->
+    <div class="modal-overlay flex-center" v-if="showQuickEditMedicalModal && store.activePatient.value">
+      <div class="modal-card form-modal" style="max-width: 650px;">
+        <div class="modal-header">
+          <div class="modal-title-area">
+            <h3>Cập nhật Dị ứng & Bệnh nền</h3>
+            <small class="text-muted">Bệnh nhân: <strong>{{ store.activePatient.value.FullName }}</strong></small>
+          </div>
+          <button class="close-modal-btn" @click="showQuickEditMedicalModal = false" style="background: transparent; border: none; font-size: 28px; line-height: 1; color: var(--text-muted); cursor: pointer;">×</button>
+        </div>
+
+        <div class="modal-body scrollable-modal-body" style="max-height: 60vh; overflow-y: auto; padding: 20px;">
+          <!-- Section A: Allergies -->
+          <div class="form-ingredients-mapping-section" style="border-top: none; padding-top: 0;">
+            <div class="ingredients-header-row">
+              <h4 class="sub-title" style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">Tiền sử Dị ứng hoạt chất / biệt dược</h4>
+              <button type="button" class="add-row-btn" @click="addQuickAllergyRow">+ Thêm dị ứng</button>
+            </div>
+
+            <div class="form-ingredients-list" v-if="quickAllergies.length > 0" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+              <div v-for="(item, idx) in quickAllergies" :key="idx" class="form-allergy-row-flex">
+                <!-- Toggle allergy type button -->
+                <button type="button" class="allergy-type-toggle-btn" @click="toggleQuickAllergyType(idx)">
+                  {{ item.isIngredient ? 'Hoạt chất' : 'Biệt dược' }}
+                </button>
+
+                <!-- Select Ingredient or Medicine -->
+                <div class="col-select">
+                  <select v-if="item.isIngredient" v-model="item.targetId" class="form-control select-control-sm">
+                    <option v-for="ing in store.activeIngredients.value" :key="ing.IngredientId" :value="ing.IngredientId">
+                      {{ ing.IngredientName }}
+                    </option>
+                  </select>
+                  <select v-else v-model="item.targetId" class="form-control select-control-sm">
+                    <option v-for="med in store.medicines.value" :key="med.MedicineId" :value="med.MedicineId">
+                      {{ med.MedicineName }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Select severity -->
+                <div class="col-severity">
+                  <select v-model="item.severity" class="form-control select-control-sm">
+                    <option value="Nghiêm trọng">Nghiêm trọng</option>
+                    <option value="Trung bình">Trung bình</option>
+                    <option value="Nhẹ">Nhẹ</option>
+                  </select>
+                </div>
+
+                <!-- Allergy Note input -->
+                <div class="col-note flex-1">
+                  <input type="text" v-model="item.note" class="form-control text-control-sm" placeholder="Triệu chứng..." />
+                </div>
+
+                <!-- Remove row button -->
+                <div class="col-delete">
+                  <button type="button" class="delete-row-btn" @click="removeQuickAllergyRow(idx)">×</button>
+                </div>
+              </div>
+            </div>
+            <div class="empty-ingredients-form" v-else>
+              <p>Chưa khai báo dị ứng nào cho bệnh nhân.</p>
+            </div>
+          </div>
+
+          <!-- Section B: Diseases -->
+          <div class="form-ingredients-mapping-section" style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+            <div class="ingredients-header-row">
+              <h4 class="sub-title" style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main);">Bệnh lý nền đang mắc</h4>
+              <button type="button" class="add-row-btn" @click="addQuickDiseaseRow">+ Thêm bệnh nền</button>
+            </div>
+
+            <div class="form-ingredients-list" v-if="quickDiseases.length > 0" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+              <div v-for="(item, idx) in quickDiseases" :key="idx" class="form-ingredient-row">
+                <!-- Select Disease -->
+                <div class="col-select">
+                  <select v-model="item.diseaseId" class="form-control select-control-sm">
+                    <option v-for="dis in store.diseases.value" :key="dis.DiseaseId" :value="dis.DiseaseId">
+                      {{ dis.DiseaseName }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Note input -->
+                <div class="col-note flex-1">
+                  <input type="text" v-model="item.note" class="form-control text-control-sm" placeholder="Chi tiết chẩn đoán..." />
+                </div>
+
+                <!-- Remove row button -->
+                <div class="col-delete">
+                  <button type="button" class="delete-row-btn" @click="removeQuickDiseaseRow(idx)">×</button>
+                </div>
+              </div>
+            </div>
+            <div class="empty-ingredients-form" v-else>
+              <p>Chưa khai báo bệnh nền mãn tính nào.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="secondary-btn" @click="showQuickEditMedicalModal = false">Hủy</button>
+          <button class="primary-btn" @click="saveQuickMedicalInfo">Lưu cập nhật</button>
         </div>
       </div>
     </div>
@@ -872,5 +1089,87 @@ const simulateOCRScan = () => {
 }
 .sig-placeholder {
   height: 60px;
+}
+
+/* Quick Edit Medical Details Styles */
+.form-ingredients-mapping-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 20px;
+}
+.ingredients-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.add-row-btn {
+  background-color: var(--primary-bg);
+  color: var(--primary-medium);
+  border: 1px solid rgba(13, 148, 136, 0.15);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.add-row-btn:hover {
+  background-color: var(--primary-medium);
+  color: #fff;
+  border-color: var(--primary-medium);
+}
+.form-allergy-row-flex {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--bg-main);
+  padding: 8px 12px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+}
+.allergy-type-toggle-btn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 90px;
+  text-align: center;
+}
+.allergy-type-toggle-btn:hover {
+  border-color: var(--primary-medium);
+  color: var(--primary-medium);
+  background-color: var(--primary-bg);
+}
+.delete-row-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+.delete-row-btn:hover {
+  color: var(--danger);
+  background-color: var(--danger-bg);
+}
+.form-ingredient-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--bg-main);
+  padding: 8px 12px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
 }
 </style>
