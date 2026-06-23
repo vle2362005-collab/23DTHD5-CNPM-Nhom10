@@ -1,12 +1,56 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { usePharmacyStore } from '../store/pharmacy'
 import type { Sale, Warning } from '../store/pharmacy'
+import { ApiService } from '../services/api'
 
 const store = usePharmacyStore()
 
 // Period selection state: '7days' | '30days' | 'all'
 const selectedPeriod = ref<'7days' | '30days' | 'all'>('all')
+
+// Statistics API Data Ref
+interface StatisticsReport {
+  TotalRevenue: number
+  CompletedSalesCount: number
+  CancelledSalesCount: number
+  TotalWarningsCount: number
+  WarningApprovalRate: number
+  ChartDaysData: Array<{
+    Date: string
+    Label: string
+    Revenue: number
+    Warnings: number
+  }>
+  WarningCategoriesBreakdown: Array<{
+    Type: string
+    Color: string
+    Count: number
+    Percent: number
+  }>
+}
+
+const stats = ref<StatisticsReport | null>(null)
+const isLoading = ref(false)
+
+const fetchStats = async () => {
+  isLoading.value = true
+  try {
+    stats.value = await ApiService.getStatisticsReport(selectedPeriod.value)
+  } catch (err) {
+    console.error('Failed to fetch statistics:', err)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchStats()
+})
+
+watch(selectedPeriod, () => {
+  fetchStats()
+})
 
 // Helper function to parse "yyyy-MM-dd HH:mm" date string
 const parseSaleDate = (dateStr: string): Date => {
@@ -38,7 +82,7 @@ const parseSaleDate = (dateStr: string): Date => {
   return new Date(dateStr)
 }
 
-// Filtered Sales based on period
+// Filtered Sales based on period (still needed for warnings audit estimation)
 const filteredSales = computed<Sale[]>(() => {
   const allSales = store.sales.value
   if (selectedPeriod.value === 'all') return allSales
@@ -53,7 +97,7 @@ const filteredSales = computed<Sale[]>(() => {
   })
 })
 
-// Filtered Warnings based on period
+// Filtered Warnings based on period (still needed for warnings audit list)
 const filteredWarnings = computed<Warning[]>(() => {
   const allWarnings = store.warnings.value
   
@@ -87,65 +131,24 @@ const filteredWarnings = computed<Warning[]>(() => {
 })
 
 // ==========================================
-// 1. METRICS COMPUTATIONS
+// 1. METRICS COMPUTATIONS (Adapted from API)
 // ==========================================
-const totalRevenue = computed(() => {
-  return filteredSales.value
-    .filter(s => s.Status === 'Completed')
-    .reduce((sum, s) => sum + s.TotalAmount, 0)
-})
-
-const completedSalesCount = computed(() => {
-  return filteredSales.value.filter(s => s.Status === 'Completed').length
-})
-
-const cancelledSalesCount = computed(() => {
-  return filteredSales.value.filter(s => s.Status === 'Cancelled').length
-})
-
-const totalWarningsCount = computed(() => {
-  return filteredWarnings.value.length
-})
-
-const warningApprovalRate = computed(() => {
-  const list = filteredWarnings.value
-  if (list.length === 0) return 100
-  const ackCount = list.filter(w => w.IsAcknowledged).length
-  return Math.round((ackCount / list.length) * 100)
-})
+const totalRevenue = computed(() => stats.value?.TotalRevenue ?? 0)
+const completedSalesCount = computed(() => stats.value?.CompletedSalesCount ?? 0)
+const cancelledSalesCount = computed(() => stats.value?.CancelledSalesCount ?? 0)
+const totalWarningsCount = computed(() => stats.value?.TotalWarningsCount ?? 0)
+const warningApprovalRate = computed(() => stats.value?.WarningApprovalRate ?? 100)
 
 // ==========================================
-// 2. LINE CHART SVG COORDINATES GENERATOR (Last 7 Days)
+// 2. LINE CHART SVG COORDINATES GENERATOR (Last 7 Days, Adapted from API)
 // ==========================================
 const chartDaysData = computed(() => {
-  const days = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
-  const result = []
-  const now = new Date(2026, 5, 23) // June 23, 2026
-  
-  // Calculate daily data for the past 7 days
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-    const dateStr = d.toISOString().split('T')[0] || '' // yyyy-mm-dd
-    const dayLabel = days[d.getDay()] || ''
-    
-    // Revenue today
-    const daySales = store.sales.value.filter(s => s.SaleDate.startsWith(dateStr) && s.Status === 'Completed')
-    const rev = daySales.reduce((sum, s) => sum + s.TotalAmount, 0)
-    
-    // Warnings today (approximate by matching sales of patients on that day)
-    const patientIds = daySales.map(s => s.PatientId)
-    const warnCount = store.warnings.value.filter(w => {
-      if (w.AcknowledgedAt && w.AcknowledgedAt.startsWith(dateStr)) return true
-      return patientIds.includes(w.PatientId)
-    }).length
-
-    result.push({
-      label: dayLabel,
-      revenue: rev,
-      warnings: warnCount
-    })
-  }
-  return result
+  if (!stats.value?.ChartDaysData) return []
+  return stats.value.ChartDaysData.map(d => ({
+    label: d.Label,
+    revenue: d.Revenue,
+    warnings: d.Warnings
+  }))
 })
 
 // Generate SVG Path for Revenue Line
@@ -183,35 +186,25 @@ const maxRevenueValue = computed(() => {
 })
 
 // ==========================================
-// 3. DONUT CHART COMPUTATIONS (Warning Types breakdown)
+// 3. DONUT CHART COMPUTATIONS (Warning Types breakdown, Adapted from API)
 // ==========================================
 const warningCategoriesBreakdown = computed(() => {
-  const list = filteredWarnings.value
-  const categories = [
-    { type: 'Dị ứng thuốc', color: '#ef4444', count: 0 },
-    { type: 'Tương tác thuốc', color: '#f59e0b', count: 0 },
-    { type: 'Chống chỉ định bệnh nền', color: '#3b82f6', count: 0 },
-    { type: 'Đối tượng đặc biệt', color: '#8b5cf6', count: 0 }
-  ]
-
-  list.forEach(w => {
-    const cat = categories.find(c => c.type === w.WarningType)
-    if (cat) cat.count++
-  })
-
-  const total = list.length
+  if (!stats.value?.WarningCategoriesBreakdown) return []
+  const list = stats.value.WarningCategoriesBreakdown
+  const total = stats.value.TotalWarningsCount
   
-  // Calculate dash offset and arrays for Donut SVG circle drawing
   let cumulativePercent = 0
-  return categories.map(cat => {
-    const percent = total > 0 ? (cat.count / total) : 0
+  return list.map(cat => {
+    const percent = total > 0 ? (cat.Count / total) : 0
     const strokeDasharray = `${percent * 251.2} 251.2`
     const strokeDashoffset = -cumulativePercent * 251.2
     cumulativePercent += percent
     
     return {
-      ...cat,
-      percent: Math.round(percent * 100),
+      type: cat.Type,
+      color: cat.Color,
+      count: cat.Count,
+      percent: cat.Percent,
       strokeDasharray,
       strokeDashoffset
     }

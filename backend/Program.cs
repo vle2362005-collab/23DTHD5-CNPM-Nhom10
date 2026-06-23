@@ -489,6 +489,98 @@ app.MapGet("/api/warnings/interactions", async (PharmacyDbContext db) =>
     return Results.Ok(warningDtos);
 }).RequireAuthorization();
 
+app.MapGet("/api/reports/statistics", async (string? period, PharmacyDbContext db) =>
+{
+    var referenceDate = DateTime.Now;
+    if (await db.Sales.AnyAsync())
+    {
+        var maxSaleDate = await db.Sales.MaxAsync(s => s.SaleDate);
+        if (maxSaleDate > referenceDate)
+        {
+            referenceDate = maxSaleDate;
+        }
+    }
+
+    DateTime? startDate = null;
+    if (period == "7days")
+    {
+        startDate = referenceDate.Date.AddDays(-6);
+    }
+    else if (period == "30days")
+    {
+        startDate = referenceDate.Date.AddDays(-29);
+    }
+
+    var salesQuery = db.Sales.AsQueryable();
+    var warningsQuery = db.Warnings.AsQueryable();
+
+    if (startDate.HasValue)
+    {
+        salesQuery = salesQuery.Where(s => s.SaleDate >= startDate.Value);
+        warningsQuery = warningsQuery.Where(w => w.CreatedAt >= startDate.Value);
+    }
+
+    var filteredSales = await salesQuery.ToListAsync();
+    var filteredWarnings = await warningsQuery.ToListAsync();
+
+    var totalRevenue = filteredSales
+        .Where(s => s.Status == "Completed")
+        .Sum(s => s.TotalAmount);
+
+    var completedSalesCount = filteredSales.Count(s => s.Status == "Completed");
+    var cancelledSalesCount = filteredSales.Count(s => s.Status == "Cancelled");
+    var totalWarningsCount = filteredWarnings.Count;
+
+    var warningApprovalRate = totalWarningsCount == 0 
+        ? 100 
+        : (int)Math.Round((double)filteredWarnings.Count(w => w.IsAcknowledged) / totalWarningsCount * 100);
+
+    var chartDaysData = new List<ChartDayDataDto>();
+    var daysOfWeekVn = new[] { "CN", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7" };
+
+    for (int i = 6; i >= 0; i--)
+    {
+        var day = referenceDate.Date.AddDays(-i);
+        var dayLabel = daysOfWeekVn[(int)day.DayOfWeek];
+        var dateStr = day.ToString("yyyy-MM-dd");
+        var nextDay = day.AddDays(1);
+
+        var daySales = await db.Sales
+            .Where(s => s.Status == "Completed" && s.SaleDate >= day && s.SaleDate < nextDay)
+            .ToListAsync();
+        var revenue = daySales.Sum(s => s.TotalAmount);
+
+        var dayWarningsCount = await db.Warnings
+            .CountAsync(w => w.CreatedAt >= day && w.CreatedAt < nextDay);
+
+        chartDaysData.Add(new ChartDayDataDto(dateStr, dayLabel, revenue, dayWarningsCount));
+    }
+
+    var categories = new[]
+    {
+        new { type = "Dị ứng thuốc", color = "#ef4444" },
+        new { type = "Tương tác thuốc", color = "#f59e0b" },
+        new { type = "Chống chỉ định bệnh nền", color = "#3b82f6" },
+        new { type = "Đối tượng đặc biệt", color = "#8b5cf6" }
+    };
+
+    var warningCategoriesBreakdown = categories.Select(cat => {
+        var count = filteredWarnings.Count(w => w.WarningType == cat.type);
+        var percent = totalWarningsCount == 0 ? 0 : (int)Math.Round((double)count / totalWarningsCount * 100);
+        return new WarningCategoryBreakdownDto(cat.type, cat.color, count, percent);
+    }).ToList();
+
+    return Results.Ok(new StatisticsReportDto(
+        totalRevenue,
+        completedSalesCount,
+        cancelledSalesCount,
+        totalWarningsCount,
+        warningApprovalRate,
+        chartDaysData,
+        warningCategoriesBreakdown
+    ));
+}).RequireAuthorization();
+
 // Patient CRUD endpoints
 app.MapPost("/api/patients", async (CreateOrUpdatePatientRequest request, PharmacyDbContext db) =>
 {
@@ -1698,3 +1790,27 @@ public record AcknowledgeWarningRequest(int AcknowledgedBy, string Decision);
 public record DiseaseRequest(string DiseaseName, string? Description);
 public record PatientAllergyRequest(int PatientId, bool IsIngredient, int TargetId, string Severity, string? Note);
 public record UpdatePatientAllergyRequest(string Severity, string? AllergyNote);
+
+public record StatisticsReportDto(
+    decimal TotalRevenue,
+    int CompletedSalesCount,
+    int CancelledSalesCount,
+    int TotalWarningsCount,
+    int WarningApprovalRate,
+    List<ChartDayDataDto> ChartDaysData,
+    List<WarningCategoryBreakdownDto> WarningCategoriesBreakdown
+);
+
+public record ChartDayDataDto(
+    string Date,
+    string Label,
+    decimal Revenue,
+    int Warnings
+);
+
+public record WarningCategoryBreakdownDto(
+    string Type,
+    string Color,
+    int Count,
+    int Percent
+);

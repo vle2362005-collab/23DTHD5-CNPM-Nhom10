@@ -923,5 +923,120 @@ export const ApiService = {
 
       return newSale
     })
+  },
+
+  async getStatisticsReport(period?: string): Promise<any> {
+    const url = period ? `/reports/statistics?period=${encodeURIComponent(period)}` : '/reports/statistics'
+    return apiGet<any>(url, getMockStatistics(period))
+  }
+}
+
+const getMockStatistics = (period?: string) => {
+  const allSales = localMocks.sales
+  const allWarnings = localMocks.warnings
+
+  // Reference date: June 23, 2026
+  const referenceDate = new Date(2026, 5, 23, 22, 0, 0)
+  let daysLimit = 0
+  if (period === '7days') daysLimit = 7
+  else if (period === '30days') daysLimit = 30
+
+  const limitTime = daysLimit > 0 ? referenceDate.getTime() - daysLimit * 24 * 60 * 60 * 1000 : 0
+
+  // Helper date parsing (simple fallback)
+  const parseMockDate = (dateStr: string): Date => {
+    const parts = dateStr.split(' ')
+    const dateParts = (parts[0] || '').split('-')
+    const year = parseInt(dateParts[0] || '2026')
+    const month = parseInt(dateParts[1] || '6') - 1
+    const day = parseInt(dateParts[2] || '23')
+    return new Date(year, month, day)
+  }
+
+  const filteredSales = allSales.filter(s => {
+    if (limitTime === 0) return true
+    const sDate = parseMockDate(s.SaleDate)
+    return sDate.getTime() >= limitTime
+  })
+
+  const filteredWarnings = allWarnings.filter(w => {
+    if (limitTime === 0) return true
+    if (w.AcknowledgedAt) {
+      const ackDate = parseMockDate(w.AcknowledgedAt)
+      return ackDate.getTime() >= limitTime
+    }
+    const patientSales = allSales.filter(s => s.PatientId === w.PatientId)
+    const firstSale = patientSales[0]
+    if (firstSale) {
+      const latestSaleDate = parseMockDate(firstSale.SaleDate)
+      return latestSaleDate.getTime() >= limitTime
+    }
+    return true
+  })
+
+  const totalRevenue = filteredSales
+    .filter(s => s.Status === 'Completed')
+    .reduce((sum, s) => sum + s.TotalAmount, 0)
+
+  const completedSalesCount = filteredSales.filter(s => s.Status === 'Completed').length
+  const cancelledSalesCount = filteredSales.filter(s => s.Status === 'Cancelled').length
+  const totalWarningsCount = filteredWarnings.length
+
+  const warningApprovalRate = totalWarningsCount === 0
+    ? 100
+    : Math.round((filteredWarnings.filter(w => w.IsAcknowledged).length / totalWarningsCount) * 100)
+
+  // 7 Days Chart Data
+  const chartDaysData = []
+  const days = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(referenceDate.getTime() - i * 24 * 60 * 60 * 1000)
+    const dateStr = d.toISOString().split('T')[0] || ''
+    const dayLabel = days[d.getDay()] || ''
+
+    const daySales = allSales.filter(s => s.SaleDate.startsWith(dateStr) && s.Status === 'Completed')
+    const rev = daySales.reduce((sum, s) => sum + s.TotalAmount, 0)
+
+    const patientIds = daySales.map(s => s.PatientId)
+    const warnCount = allWarnings.filter(w => {
+      if (w.AcknowledgedAt && w.AcknowledgedAt.startsWith(dateStr)) return true
+      return patientIds.includes(w.PatientId)
+    }).length
+
+    chartDaysData.push({
+      Date: dateStr,
+      Label: dayLabel,
+      Revenue: rev,
+      Warnings: warnCount
+    })
+  }
+
+  // Warning breakdown
+  const categories = [
+    { Type: 'Dị ứng thuốc', Color: '#ef4444' },
+    { Type: 'Tương tác thuốc', Color: '#f59e0b' },
+    { Type: 'Chống chỉ định bệnh nền', Color: '#3b82f6' },
+    { Type: 'Đối tượng đặc biệt', Color: '#8b5cf6' }
+  ]
+
+  const warningCategoriesBreakdown = categories.map(cat => {
+    const count = filteredWarnings.filter(w => w.WarningType === cat.Type).length
+    const percent = totalWarningsCount === 0 ? 0 : Math.round((count / totalWarningsCount) * 100)
+    return {
+      Type: cat.Type,
+      Color: cat.Color,
+      Count: count,
+      Percent: percent
+    }
+  })
+
+  return {
+    TotalRevenue: totalRevenue,
+    CompletedSalesCount: completedSalesCount,
+    CancelledSalesCount: cancelledSalesCount,
+    TotalWarningsCount: totalWarningsCount,
+    WarningApprovalRate: warningApprovalRate,
+    ChartDaysData: chartDaysData,
+    WarningCategoriesBreakdown: warningCategoriesBreakdown
   }
 }
