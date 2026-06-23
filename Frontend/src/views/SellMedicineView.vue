@@ -889,7 +889,7 @@ const saveQuickMedicalInfo = async () => {
                       </button>
                     </div>
                     <div v-else class="ack-done">
-                      <span>✓ Đã duyệt: <strong>{{ w.Decision }}</strong> (Bởi: Ds. Trần Thị Mai)</span>
+                      <span>✓ Đã duyệt: <strong>{{ w.Decision }}</strong> (Bởi: {{ store.currentUser.value?.FullName || 'Ds. Trần Thị Mai' }})</span>
                     </div>
                   </div>
                 </div>
@@ -911,7 +911,7 @@ const saveQuickMedicalInfo = async () => {
                 <div>Khách hàng: <strong>{{ store.activePatient.value?.FullName }}</strong></div>
                 <div>Điện thoại: {{ store.activePatient.value?.Phone }}</div>
                 <div>Địa chỉ: {{ store.activePatient.value?.Address || 'Không có' }}</div>
-                <div>Dược sĩ cấp phát: <strong>Ds. Trần Thị Mai</strong></div>
+                <div>Dược sĩ cấp phát: <strong>{{ store.currentUser.value?.FullName || 'Ds. Trần Thị Mai' }}</strong></div>
               </div>
 
               <table class="receipt-table">
@@ -950,7 +950,7 @@ const saveQuickMedicalInfo = async () => {
                 <div class="sig-col">
                   <span>Dược sĩ xác nhận</span>
                   <div class="sig-placeholder"></div>
-                  <strong>Ds. Trần Thị Mai</strong>
+                  <strong>{{ store.currentUser.value?.FullName || 'Ds. Trần Thị Mai' }}</strong>
                 </div>
               </div>
             </div>
