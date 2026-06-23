@@ -1024,6 +1024,32 @@ app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbCo
         }
     }
 
+    foreach (var item in request.CartItems)
+    {
+        var matchMed = patientAllergiesData.FirstOrDefault(pa => pa.MedicineId == item.MedicineId);
+        if (matchMed != null)
+        {
+            var medName = dbMedicines.FirstOrDefault(m => m.MedicineId == item.MedicineId)?.MedicineName ?? "";
+            if (!generatedWarnings.Any(w => w.MedicineId == item.MedicineId && w.WarningType == "Dị ứng thuốc" && w.Message.Contains("biệt dược")))
+            {
+                generatedWarnings.Add(new Warning(
+                    Random.Shared.Next(1000, 10000),
+                    checkId,
+                    patient.PatientId,
+                    item.MedicineId,
+                    "Dị ứng thuốc",
+                    matchMed.Severity ?? "Nghiêm trọng",
+                    $"Bệnh nhân dị ứng trực tiếp với biệt dược [{medName}].",
+                    $"Ngay lập tức thay thế thuốc [{medName}] bằng một thuốc khác tương đương không gây dị ứng.",
+                    false,
+                    null,
+                    null,
+                    null
+                ));
+            }
+        }
+    }
+
     // 2. Drug Interactions check
     for (int i = 0; i < cartIngredients.Count; i++)
     {
