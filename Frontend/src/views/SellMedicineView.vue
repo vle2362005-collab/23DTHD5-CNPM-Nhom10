@@ -109,6 +109,16 @@ const precheckAlerts = computed(() => {
   const patientAllergiesData = store.patientAllergies.value.filter(pa => pa.PatientId === activePat.PatientId)
   const medIngredients = store.medicineIngredients.value.filter(mi => mi.MedicineId === currentMed.MedicineId)
 
+  // 1.1 Direct brand/medicine level allergy
+  const isDirectAllergic = patientAllergiesData.find(pa => pa.MedicineId === currentMed.MedicineId)
+  if (isDirectAllergic) {
+    alerts.push({
+      severity: isDirectAllergic.Severity || 'Nghiêm trọng',
+      message: `⚠️ Cảnh báo sớm: Bệnh nhân dị ứng trực tiếp với biệt dược [${currentMed.MedicineName}]!`
+    })
+  }
+
+  // 1.2 Ingredient level allergy
   medIngredients.forEach(mi => {
     const ing = store.activeIngredients.value.find(ai => ai.IngredientId === mi.IngredientId)
     if (ing) {
@@ -143,8 +153,247 @@ const precheckAlerts = computed(() => {
     })
   })
 
+  // 3. Check Contraindications
+  // 3.1 Disease-based contraindications
+  const patientDiseasesData = store.patientDiseases.value.filter(pd => pd.PatientId === activePat.PatientId)
+  patientDiseasesData.forEach(pDisease => {
+    const contra = store.contraindications.value.find(c =>
+      c.DiseaseId === pDisease.DiseaseId &&
+      (c.MedicineId === currentMed.MedicineId || (c.IngredientId ? medIngredients.some(mi => mi.IngredientId === c.IngredientId) : false))
+    )
+
+    if (contra) {
+      const disName = store.diseases.value.find(d => d.DiseaseId === pDisease.DiseaseId)?.DiseaseName || ''
+      alerts.push({
+        severity: contra.Severity,
+        message: `❌ Chống chỉ định bệnh nền: Bệnh nhân có bệnh nền [${disName}], chống chỉ định dùng thuốc này! (${contra.Description || ''})`
+      })
+    }
+  })
+
+  // 3.2 Special conditions contraindications (pregnancy, breastfeeding)
+  const specialContras = store.contraindications.value.filter(c =>
+    c.ConditionType === 'Đối tượng đặc biệt' &&
+    (c.MedicineId === currentMed.MedicineId || (c.IngredientId ? medIngredients.some(mi => mi.IngredientId === c.IngredientId) : false))
+  )
+
+  specialContras.forEach(contra => {
+    let isPregnancyContra = true
+    let isBreastfeedingContra = true
+
+    const combinedText = ((contra.Description || '') + ' ' + (contra.Recommendation || '')).toLowerCase()
+    if (combinedText.trim()) {
+      const mentionsBreastfeeding = combinedText.includes('cho con bú') || 
+                                   combinedText.includes('sữa mẹ') || 
+                                   combinedText.includes('nuôi con') || 
+                                   combinedText.includes('breastfeed') || 
+                                   combinedText.includes('lactat')
+                                   
+      const mentionsPregnancy = combinedText.includes('mang thai') || 
+                               combinedText.includes('thai kỳ') || 
+                               combinedText.includes('bà bầu') || 
+                               combinedText.includes('có thai') || 
+                               combinedText.includes('pregnant') || 
+                               combinedText.includes('thai nhi')
+
+      if (mentionsBreastfeeding && !mentionsPregnancy) {
+        isPregnancyContra = false
+      }
+      if (mentionsPregnancy && !mentionsBreastfeeding) {
+        isBreastfeedingContra = false
+      }
+    }
+
+    if (activePat.IsPregnant && isPregnancyContra) {
+      alerts.push({
+        severity: contra.Severity,
+        message: `🤰 Chống chỉ định đặc biệt: Thuốc chống chỉ định ở phụ nữ mang thai! (${contra.Description || ''})`
+      })
+    }
+
+    if (activePat.IsBreastfeeding && isBreastfeedingContra) {
+      alerts.push({
+        severity: contra.Severity,
+        message: `🍼 Chống chỉ định đặc biệt: Thuốc chống chỉ định ở phụ nữ cho con bú! (${contra.Description || ''})`
+      })
+    }
+  })
+
   return alerts
 })
+
+// Real-time Cart Alerts engine
+const liveCartWarnings = computed(() => {
+  const warningsList: { medicineId: number; type: string; severity: string; message: string; recommendation: string }[] = []
+  const activePat = store.activePatient.value
+  if (!activePat) return warningsList
+
+  const cartItems = store.prescriptionCart.value
+  if (cartItems.length === 0) return warningsList
+
+  // Extract ingredients of all cart items
+  const cartIngredients = cartItems.map(item => {
+    const ingredients = store.medicineIngredients.value
+      .filter(mi => mi.MedicineId === item.medicine.MedicineId)
+      .map(mi => {
+        const ingName = store.activeIngredients.value.find(ai => ai.IngredientId === mi.IngredientId)?.IngredientName || ''
+        return { ingredientId: mi.IngredientId, ingredientName: ingName }
+      })
+    return {
+      medicineId: item.medicine.MedicineId,
+      medicineName: item.medicine.MedicineName,
+      ingredients
+    }
+  })
+
+  // 1. Check Allergies
+  const patientAllergiesData = store.patientAllergies.value.filter(pa => pa.PatientId === activePat.PatientId)
+  cartIngredients.forEach(cartIng => {
+    // 1.1 Direct brand/medicine level allergy
+    const isDirectAllergic = patientAllergiesData.find(pa => pa.MedicineId === cartIng.medicineId)
+    if (isDirectAllergic) {
+      warningsList.push({
+        medicineId: cartIng.medicineId,
+        type: 'Dị ứng thuốc',
+        severity: isDirectAllergic.Severity || 'Nghiêm trọng',
+        message: `Bệnh nhân dị ứng trực tiếp với biệt dược [${cartIng.medicineName}].`,
+        recommendation: isDirectAllergic.AllergyNote || 'Cân nhắc đổi sang thuốc khác.'
+      })
+    }
+
+    // 1.2 Ingredient level allergy
+    cartIng.ingredients.forEach(ing => {
+      const isAllergic = patientAllergiesData.find(pa => pa.IngredientId === ing.ingredientId)
+      if (isAllergic) {
+        warningsList.push({
+          medicineId: cartIng.medicineId,
+          type: 'Dị ứng thuốc',
+          severity: isAllergic.Severity || 'Nghiêm trọng',
+          message: `Bệnh nhân dị ứng với hoạt chất [${ing.ingredientName}] có trong công thức thuốc.`,
+          recommendation: isAllergic.AllergyNote || 'Cân nhắc đổi sang thuốc khác.'
+        })
+      }
+    })
+  })
+
+  // 2. Check Drug Interactions between cart items
+  for (let i = 0; i < cartIngredients.length; i++) {
+    for (let j = i + 1; j < cartIngredients.length; j++) {
+      const ingA = cartIngredients[i]
+      const ingB = cartIngredients[j]
+      if (!ingA || !ingB) continue
+
+      ingA.ingredients.forEach(iA => {
+        ingB.ingredients.forEach(iB => {
+          const interact = store.drugInteractions.value.find(di =>
+            (di.IngredientAId === iA.ingredientId && di.IngredientBId === iB.ingredientId) ||
+            (di.IngredientAId === iB.ingredientId && di.IngredientBId === iA.ingredientId)
+          )
+
+          if (interact) {
+            warningsList.push({
+              medicineId: ingA.medicineId,
+              type: 'Tương tác thuốc',
+              severity: interact.Severity,
+              message: `Tương tác [${interact.Severity}] với thuốc [${ingB.medicineName}] (${iA.ingredientName} và ${iB.ingredientName}).`,
+              recommendation: interact.Recommendation || interact.Description || ''
+            })
+            warningsList.push({
+              medicineId: ingB.medicineId,
+              type: 'Tương tác thuốc',
+              severity: interact.Severity,
+              message: `Tương tác [${interact.Severity}] với thuốc [${ingA.medicineName}] (${iB.ingredientName} và ${iA.ingredientName}).`,
+              recommendation: interact.Recommendation || interact.Description || ''
+            })
+          }
+        })
+      })
+    }
+  }
+
+  // 3. Check Contraindications
+  // 3.1 Disease-based contraindications
+  const patientDiseasesData = store.patientDiseases.value.filter(pd => pd.PatientId === activePat.PatientId)
+  cartIngredients.forEach(cartIng => {
+    patientDiseasesData.forEach(pDisease => {
+      const contra = store.contraindications.value.find(c =>
+        c.DiseaseId === pDisease.DiseaseId &&
+        (c.MedicineId === cartIng.medicineId || (c.IngredientId ? cartIng.ingredients.some(i => i.ingredientId === c.IngredientId) : false))
+      )
+
+      if (contra) {
+        const disName = store.diseases.value.find(d => d.DiseaseId === pDisease.DiseaseId)?.DiseaseName || ''
+        warningsList.push({
+          medicineId: cartIng.medicineId,
+          type: 'Chống chỉ định bệnh nền',
+          severity: contra.Severity,
+          message: `Thuốc chống chỉ định ở người có bệnh nền [${disName}]. ${contra.Description || ''}`,
+          recommendation: contra.Recommendation || 'Cần đổi sang thuốc khác an toàn hơn.'
+        })
+      }
+    })
+
+    // 3.2 Special conditions (Đối tượng đặc biệt)
+    const specialContras = store.contraindications.value.filter(c =>
+      c.ConditionType === 'Đối tượng đặc biệt' &&
+      (c.MedicineId === cartIng.medicineId || (c.IngredientId ? cartIng.ingredients.some(i => i.ingredientId === c.IngredientId) : false))
+    )
+
+    specialContras.forEach(contra => {
+      let isPregnancyContra = true
+      let isBreastfeedingContra = true
+
+      const combinedText = ((contra.Description || '') + ' ' + (contra.Recommendation || '')).toLowerCase()
+      if (combinedText.trim()) {
+        const mentionsBreastfeeding = combinedText.includes('cho con bú') || 
+                                     combinedText.includes('sữa mẹ') || 
+                                     combinedText.includes('nuôi con') || 
+                                     combinedText.includes('breastfeed') || 
+                                     combinedText.includes('lactat')
+                                     
+        const mentionsPregnancy = combinedText.includes('mang thai') || 
+                                 combinedText.includes('thai kỳ') || 
+                                 combinedText.includes('bà bầu') || 
+                                 combinedText.includes('có thai') || 
+                                 combinedText.includes('pregnant') || 
+                                 combinedText.includes('thai nhi')
+
+        if (mentionsBreastfeeding && !mentionsPregnancy) {
+          isPregnancyContra = false
+        }
+        if (mentionsPregnancy && !mentionsBreastfeeding) {
+          isBreastfeedingContra = false
+        }
+      }
+
+      if (activePat.IsPregnant && isPregnancyContra) {
+        warningsList.push({
+          medicineId: cartIng.medicineId,
+          type: 'Đối tượng đặc biệt',
+          severity: contra.Severity,
+          message: `Thuốc chống chỉ định ở phụ nữ mang thai. ${contra.Description || ''}`,
+          recommendation: contra.Recommendation || 'Đổi sang thuốc khác.'
+        })
+      }
+
+      if (activePat.IsBreastfeeding && isBreastfeedingContra) {
+        warningsList.push({
+          medicineId: cartIng.medicineId,
+          type: 'Đối tượng đặc biệt',
+          severity: contra.Severity,
+          message: `Thuốc chống chỉ định ở phụ nữ cho con bú. ${contra.Description || ''}`,
+          recommendation: contra.Recommendation || 'Đổi sang thuốc khác.'
+        })
+      }
+    })
+  })
+
+  return warningsList
+})
+
+const getItemWarnings = (medicineId: number) => {
+  return liveCartWarnings.value.filter(w => w.medicineId === medicineId)
+}
 
 // OCR Scanning Simulator states
 const isScanningOCR = ref(false)
@@ -489,6 +738,25 @@ const saveQuickMedicalInfo = async () => {
 
         <!-- Prescription Cart Table -->
         <div class="cart-table-wrapper" v-if="store.prescriptionCart.value.length > 0">
+          <!-- Live Clinical Alert Summary Panel -->
+          <div class="live-safety-panel" v-if="liveCartWarnings.length > 0">
+            <div class="live-safety-panel-header">
+              <span class="safety-pulse-dot"></span>
+              <h4>⚠️ CẢNH BÁO AN TOÀN LÂM SÀNG TRỰC TIẾP (Phát hiện {{ liveCartWarnings.length }} rủi ro)</h4>
+            </div>
+            <div class="live-safety-panel-body">
+              <div v-for="(w, wIdx) in liveCartWarnings" :key="wIdx" class="live-safety-item">
+                <span :class="['live-severity-tag', w.severity === 'Nghiêm trọng' || w.severity === 'High' ? 'danger' : 'warning']">
+                  {{ w.severity }}
+                </span>
+                <span class="live-safety-msg">
+                  <strong>[{{ w.type }}]</strong> {{ w.message }}
+                  <span class="live-safety-recom" v-if="w.recommendation"> — <em>Khuyến cáo: {{ w.recommendation }}</em></span>
+                </span>
+              </div>
+            </div>
+          </div>
+
           <table class="dashboard-table">
             <thead>
               <tr>
@@ -502,7 +770,23 @@ const saveQuickMedicalInfo = async () => {
             </thead>
             <tbody>
               <tr v-for="(item, idx) in store.prescriptionCart.value" :key="idx">
-                <td><strong>{{ item.medicine.MedicineName }}</strong></td>
+                <td>
+                  <div class="cart-item-name-cell">
+                    <strong>{{ item.medicine.MedicineName }}</strong>
+                    <!-- Render dynamic warning tags if there are safety warnings -->
+                    <div class="cart-item-warnings" v-if="getItemWarnings(item.medicine.MedicineId).length > 0">
+                      <div 
+                        v-for="(w, wIdx) in getItemWarnings(item.medicine.MedicineId)" 
+                        :key="wIdx" 
+                        :class="['cart-item-warning-badge', w.severity === 'Nghiêm trọng' || w.severity === 'High' ? 'danger' : 'warning']"
+                        :title="w.recommendation"
+                      >
+                        <span class="warning-icon">⚠️</span>
+                        <span class="warning-text">{{ w.message }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
                 <td>{{ item.medicine.Strength }}</td>
                 <!-- Editable quantity directly in table -->
                 <td>
@@ -1171,5 +1455,112 @@ const saveQuickMedicalInfo = async () => {
   padding: 8px 12px;
   border-radius: var(--border-radius-md);
   border: 1px solid var(--border-color);
+}
+
+/* Live Safety Panel & Cart Item Warnings Styling */
+.live-safety-panel {
+  background-color: rgba(239, 68, 68, 0.03);
+  border: 1.5px solid rgba(239, 68, 68, 0.15);
+  border-radius: var(--border-radius-lg);
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+.live-safety-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.live-safety-panel-header h4 {
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+.safety-pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--danger);
+  border-radius: 50%;
+  animation: pulseDot 2s infinite;
+}
+@keyframes pulseDot {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+.live-safety-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.live-safety-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.live-severity-tag {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: var(--border-radius-sm);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.live-severity-tag.danger {
+  background-color: var(--danger-bg);
+  color: var(--danger);
+}
+.live-severity-tag.warning {
+  background-color: var(--warning-bg);
+  color: var(--warning);
+}
+.live-safety-msg {
+  color: var(--text-main);
+}
+.live-safety-recom {
+  color: var(--text-muted);
+}
+
+.cart-item-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cart-item-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cart-item-warning-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--border-radius-sm);
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1.5px solid transparent;
+  width: fit-content;
+}
+.cart-item-warning-badge.danger {
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.1);
+}
+.cart-item-warning-badge.warning {
+  background-color: var(--warning-bg);
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.1);
+}
+.cart-item-warning-badge .warning-icon {
+  font-size: 12px;
+}
+.cart-item-warning-badge .warning-text {
+  line-height: 1.2;
 }
 </style>
