@@ -537,7 +537,7 @@ app.MapPost("/api/patients", async (CreateOrUpdatePatientRequest request, Pharma
     );
 
     return Results.Ok(resPatient);
-}).RequireAuthorization(policy => policy.RequireRole("admin", "manager"));
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager", "pharmacist"));
 
 app.MapPut("/api/patients/{id:int}", async (int id, CreateOrUpdatePatientRequest request, PharmacyDbContext db) =>
 {
@@ -613,7 +613,7 @@ app.MapPut("/api/patients/{id:int}", async (int id, CreateOrUpdatePatientRequest
     );
 
     return Results.Ok(resPatient);
-}).RequireAuthorization(policy => policy.RequireRole("admin", "manager"));
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager", "pharmacist"));
 
 app.MapDelete("/api/patients/{id:int}", async (int id, PharmacyDbContext db) =>
 {
