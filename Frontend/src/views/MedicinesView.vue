@@ -31,7 +31,7 @@ const formIngredients = ref<{ IngredientId: number; Amount: string }[]>([])
 
 // Helper: check user permission
 const canManage = computed(() => {
-  return store.currentRole.value === 'admin' || store.currentRole.value === 'manager'
+  return store.currentRole.value === 'admin'
 })
 
 // Filtered medicines list

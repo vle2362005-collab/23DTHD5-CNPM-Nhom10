@@ -11,5 +11,14 @@ namespace Backend.Data
 
         public DbSet<DbUser> Users { get; set; } = null!;
         public DbSet<DbRole> Roles { get; set; } = null!;
+        public DbSet<DbMedicine> Medicines { get; set; } = null!;
+        public DbSet<DbMedicineIngredient> MedicineIngredients { get; set; } = null!;
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<DbMedicineIngredient>()
+                .HasKey(mi => new { mi.MedicineId, mi.IngredientId });
+        }
     }
 }
