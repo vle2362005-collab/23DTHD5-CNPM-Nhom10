@@ -32,6 +32,11 @@ const routes = [
     component: MedicinesView
   },
   {
+    path: '/drug-ingredients-groups',
+    name: 'drug-ingredients-groups',
+    component: () => import('../views/DrugIngredientsGroupsView.vue')
+  },
+  {
     path: '/patients',
     name: 'patients',
     component: PatientsView

@@ -323,8 +323,64 @@ export const ApiService = {
   async getDrugGroups(): Promise<DrugGroup[]> {
     return apiGet<DrugGroup[]>('/druggroups', localMocks.drugGroups)
   },
+  async createDrugGroup(group: Omit<DrugGroup, 'DrugGroupId'>): Promise<DrugGroup> {
+    return apiPost<DrugGroup, Omit<DrugGroup, 'DrugGroupId'>>('/druggroups', group, () => {
+      const newId = localMocks.drugGroups.length > 0 ? Math.max(...localMocks.drugGroups.map(dg => dg.DrugGroupId)) + 1 : 1
+      const newGroup: DrugGroup = {
+        ...group,
+        DrugGroupId: newId
+      }
+      localMocks.drugGroups.push(newGroup)
+      return newGroup
+    })
+  },
+  async updateDrugGroup(id: number, group: DrugGroup): Promise<DrugGroup> {
+    return apiPut<DrugGroup, DrugGroup>(`/druggroups/${id}`, group, () => {
+      const idx = localMocks.drugGroups.findIndex(dg => dg.DrugGroupId === id)
+      if (idx >= 0) localMocks.drugGroups[idx] = group
+      return group
+    })
+  },
+  async deleteDrugGroup(id: number): Promise<boolean> {
+    return apiDelete(`/druggroups/${id}`, () => {
+      const idx = localMocks.drugGroups.findIndex(dg => dg.DrugGroupId === id)
+      if (idx >= 0) {
+        localMocks.drugGroups.splice(idx, 1)
+        return true
+      }
+      return false
+    })
+  },
   async getIngredients(): Promise<ActiveIngredient[]> {
     return apiGet<ActiveIngredient[]>('/ingredients', localMocks.activeIngredients)
+  },
+  async createIngredient(ingredient: Omit<ActiveIngredient, 'IngredientId'>): Promise<ActiveIngredient> {
+    return apiPost<ActiveIngredient, Omit<ActiveIngredient, 'IngredientId'>>('/ingredients', ingredient, () => {
+      const newId = localMocks.activeIngredients.length > 0 ? Math.max(...localMocks.activeIngredients.map(ai => ai.IngredientId)) + 1 : 1
+      const newIngredient: ActiveIngredient = {
+        ...ingredient,
+        IngredientId: newId
+      }
+      localMocks.activeIngredients.push(newIngredient)
+      return newIngredient
+    })
+  },
+  async updateIngredient(id: number, ingredient: ActiveIngredient): Promise<ActiveIngredient> {
+    return apiPut<ActiveIngredient, ActiveIngredient>(`/ingredients/${id}`, ingredient, () => {
+      const idx = localMocks.activeIngredients.findIndex(ai => ai.IngredientId === id)
+      if (idx >= 0) localMocks.activeIngredients[idx] = ingredient
+      return ingredient
+    })
+  },
+  async deleteIngredient(id: number): Promise<boolean> {
+    return apiDelete(`/ingredients/${id}`, () => {
+      const idx = localMocks.activeIngredients.findIndex(ai => ai.IngredientId === id)
+      if (idx >= 0) {
+        localMocks.activeIngredients.splice(idx, 1)
+        return true
+      }
+      return false
+    })
   },
   async getMedicineIngredients(): Promise<MedicineIngredient[]> {
     return apiGet<MedicineIngredient[]>('/medicineingredients', localMocks.medicineIngredients)

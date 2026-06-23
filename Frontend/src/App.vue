@@ -19,9 +19,9 @@ const activeTab = computed(() => {
 
 // Watch role change to check accessibility and redirect if needed
 const roleAllowedTabs: Record<'admin' | 'pharmacist' | 'manager', string[]> = {
-  admin: ['dashboard', 'medicines', 'patients', 'safety-alerts', 'sales-history', 'users', 'settings'],
-  pharmacist: ['dashboard', 'sell-medicine', 'medicines', 'patients', 'safety-alerts', 'sales-history'],
-  manager: ['dashboard', 'medicines', 'patients', 'safety-alerts', 'sales-history']
+  admin: ['dashboard', 'medicines', 'drug-ingredients-groups', 'patients', 'safety-alerts', 'sales-history', 'users', 'settings'],
+  pharmacist: ['dashboard', 'sell-medicine', 'medicines', 'drug-ingredients-groups', 'patients', 'safety-alerts', 'sales-history'],
+  manager: ['dashboard', 'medicines', 'drug-ingredients-groups', 'patients', 'safety-alerts', 'sales-history']
 }
 
 watch(currentRole, (newRole) => {
@@ -92,6 +92,7 @@ const handleTabChange = (tabId: string) => {
                 <span v-if="activeTab === 'dashboard'">Bảng tổng quan</span>
                 <span v-else-if="activeTab === 'sell-medicine'">Khu vực bán thuốc</span>
                 <span v-else-if="activeTab === 'medicines'">Danh mục thuốc (Medicines)</span>
+                <span v-else-if="activeTab === 'drug-ingredients-groups'">Danh mục hoạt chất và nhóm thuốc (Ingredients & Groups)</span>
                 <span v-else-if="activeTab === 'patients'">Hồ sơ bệnh nhân (Patients)</span>
                 <span v-else-if="activeTab === 'safety-alerts'">Dữ liệu An toàn (Interactions & Contraindications)</span>
                 <span v-else-if="activeTab === 'sales-history'">Lịch sử giao dịch (Sales & Warnings)</span>

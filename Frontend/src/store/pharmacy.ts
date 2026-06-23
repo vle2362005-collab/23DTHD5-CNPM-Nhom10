@@ -541,6 +541,52 @@ export function usePharmacyStore() {
     medicineIngredients.value = medicineIngredients.value.filter(mi => mi.MedicineId !== medicineId)
   }
 
+  const addDrugGroup = async (groupData: Omit<DrugGroup, 'DrugGroupId'>) => {
+    const newGroup = await ApiService.createDrugGroup(groupData)
+    drugGroups.value.push(newGroup)
+    return newGroup
+  }
+
+  const updateDrugGroupStore = async (id: number, groupData: DrugGroup) => {
+    const updatedGroup = await ApiService.updateDrugGroup(id, groupData)
+    const idx = drugGroups.value.findIndex(dg => dg.DrugGroupId === id)
+    if (idx !== -1) {
+      drugGroups.value[idx] = updatedGroup
+    }
+    return updatedGroup
+  }
+
+  const deleteDrugGroupStore = async (id: number) => {
+    const success = await ApiService.deleteDrugGroup(id)
+    if (success) {
+      drugGroups.value = drugGroups.value.filter(dg => dg.DrugGroupId !== id)
+    }
+    return success
+  }
+
+  const addIngredient = async (ingredientData: Omit<ActiveIngredient, 'IngredientId'>) => {
+    const newIngredient = await ApiService.createIngredient(ingredientData)
+    activeIngredients.value.push(newIngredient)
+    return newIngredient
+  }
+
+  const updateIngredientStore = async (id: number, ingredientData: ActiveIngredient) => {
+    const updatedIngredient = await ApiService.updateIngredient(id, ingredientData)
+    const idx = activeIngredients.value.findIndex(ai => ai.IngredientId === id)
+    if (idx !== -1) {
+      activeIngredients.value[idx] = updatedIngredient
+    }
+    return updatedIngredient
+  }
+
+  const deleteIngredientStore = async (id: number) => {
+    const success = await ApiService.deleteIngredient(id)
+    if (success) {
+      activeIngredients.value = activeIngredients.value.filter(ai => ai.IngredientId !== id)
+    }
+    return success
+  }
+
   const addUser = async (userData: Omit<User, 'UserId' | 'CreatedAt'>) => {
     const newUser = await ApiService.createUser(userData)
     users.value.push(newUser)
@@ -742,6 +788,12 @@ export function usePharmacyStore() {
     addMedicine,
     updateMedicine,
     deleteMedicine,
+    addDrugGroup,
+    updateDrugGroupStore,
+    deleteDrugGroupStore,
+    addIngredient,
+    updateIngredientStore,
+    deleteIngredientStore,
     addUser,
     updateUserStore,
     deleteUserStore,
