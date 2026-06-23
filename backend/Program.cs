@@ -472,6 +472,102 @@ app.MapDelete("/api/medicines/{id:int}", async (int id, PharmacyDbContext db) =>
     return Results.Ok(new { success = true });
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
+// Drug Group CRUD endpoints
+app.MapPost("/api/druggroups", async (DrugGroupRequest request, PharmacyDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(request.GroupName))
+    {
+        return Results.BadRequest("Tên nhóm thuốc không được để trống.");
+    }
+    var dbGroup = new DbDrugGroup
+    {
+        GroupName = request.GroupName,
+        Description = request.Description
+    };
+    db.DrugGroups.Add(dbGroup);
+    await db.SaveChangesAsync();
+    return Results.Ok(new DrugGroup(dbGroup.DrugGroupId, dbGroup.GroupName, dbGroup.Description));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapPut("/api/druggroups/{id:int}", async (int id, DrugGroupRequest request, PharmacyDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(request.GroupName))
+    {
+        return Results.BadRequest("Tên nhóm thuốc không được để trống.");
+    }
+    var dbGroup = await db.DrugGroups.FindAsync(id);
+    if (dbGroup == null) return Results.NotFound("Không tìm thấy nhóm thuốc.");
+
+    dbGroup.GroupName = request.GroupName;
+    dbGroup.Description = request.Description;
+    await db.SaveChangesAsync();
+    return Results.Ok(new DrugGroup(dbGroup.DrugGroupId, dbGroup.GroupName, dbGroup.Description));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapDelete("/api/druggroups/{id:int}", async (int id, PharmacyDbContext db) =>
+{
+    var dbGroup = await db.DrugGroups.FindAsync(id);
+    if (dbGroup == null) return Results.NotFound("Không tìm thấy nhóm thuốc.");
+
+    var hasMedicines = await db.Medicines.AnyAsync(m => m.DrugGroupId == id);
+    if (hasMedicines)
+    {
+        return Results.BadRequest("Không thể xóa nhóm thuốc này vì đang có thuốc tham chiếu thuộc về nhóm.");
+    }
+
+    db.DrugGroups.Remove(dbGroup);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { success = true });
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+// Active Ingredient CRUD endpoints
+app.MapPost("/api/ingredients", async (ActiveIngredientRequest request, PharmacyDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(request.IngredientName))
+    {
+        return Results.BadRequest("Tên hoạt chất không được để trống.");
+    }
+    var dbIngredient = new DbActiveIngredient
+    {
+        IngredientName = request.IngredientName,
+        Description = request.Description
+    };
+    db.ActiveIngredients.Add(dbIngredient);
+    await db.SaveChangesAsync();
+    return Results.Ok(new ActiveIngredient(dbIngredient.IngredientId, dbIngredient.IngredientName, dbIngredient.Description));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapPut("/api/ingredients/{id:int}", async (int id, ActiveIngredientRequest request, PharmacyDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(request.IngredientName))
+    {
+        return Results.BadRequest("Tên hoạt chất không được để trống.");
+    }
+    var dbIngredient = await db.ActiveIngredients.FindAsync(id);
+    if (dbIngredient == null) return Results.NotFound("Không tìm thấy hoạt chất.");
+
+    dbIngredient.IngredientName = request.IngredientName;
+    dbIngredient.Description = request.Description;
+    await db.SaveChangesAsync();
+    return Results.Ok(new ActiveIngredient(dbIngredient.IngredientId, dbIngredient.IngredientName, dbIngredient.Description));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapDelete("/api/ingredients/{id:int}", async (int id, PharmacyDbContext db) =>
+{
+    var dbIngredient = await db.ActiveIngredients.FindAsync(id);
+    if (dbIngredient == null) return Results.NotFound("Không tìm thấy hoạt chất.");
+
+    var hasMedicines = await db.MedicineIngredients.AnyAsync(mi => mi.IngredientId == id);
+    if (hasMedicines)
+    {
+        return Results.BadRequest("Không thể xóa hoạt chất này vì đang được sử dụng trong danh mục thuốc.");
+    }
+
+    db.ActiveIngredients.Remove(dbIngredient);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { success = true });
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
 // Safety Check Endpoint
 app.MapPost("/api/safety-check", (SafetyCheckRequest request) =>
 {
@@ -817,3 +913,5 @@ public record MedicineRequest(
     List<MedicineIngredientDto>? Ingredients
 );
 public record MedicineIngredientDto(int IngredientId, string? Amount);
+public record DrugGroupRequest(string GroupName, string? Description);
+public record ActiveIngredientRequest(string IngredientName, string? Description);

@@ -44,6 +44,11 @@ const menuItems = computed<MenuItem[]>(() => [
     roles: ['admin', 'pharmacist', 'manager']
   },
   {
+    id: 'drug-ingredients-groups',
+    name: 'Hoạt chất & Nhóm thuốc',
+    roles: ['admin', 'pharmacist', 'manager']
+  },
+  {
     id: 'patients',
     name: 'Hồ sơ khách hàng',
     roles: ['admin', 'pharmacist', 'manager']
@@ -138,6 +143,13 @@ const handleTabSelect = (tabId: string) => {
                 <path d="M8.5 8.5l7 7" />
                 <circle cx="16" cy="8" r="1.5" />
                 <circle cx="8" cy="16" r="1.5" />
+              </svg>
+              <!-- Hoạt chất & Nhóm thuốc -->
+              <svg v-else-if="item.id === 'drug-ingredients-groups'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 2h4" />
+                <path d="M12 2v6" />
+                <path d="M10 5h4" />
+                <path d="M19 22H5c-1.1 0-1.8-1.2-1.2-2.1L9 10V4h6v6l5.2 9.9c.6.9-.1 2.1-1.2 2.1z" />
               </svg>
               <!-- Hồ sơ khách hàng -->
               <svg v-else-if="item.id === 'patients'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
