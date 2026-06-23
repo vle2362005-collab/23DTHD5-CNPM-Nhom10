@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ApiService } from '../services/api'
 
 // ==========================================
@@ -643,8 +643,27 @@ export function usePharmacyStore() {
     localStorage.removeItem('safepharm_token')
   }
 
-  // Trigger init immediately on startup
-  initializeStore()
+  // Watch for auth state changes to synchronize with localStorage automatically
+  watch(isAuthenticated, (newVal) => {
+    localStorage.setItem('safepharm_auth', newVal ? 'true' : 'false')
+  })
+
+  watch(currentUser, (newUser) => {
+    if (newUser) {
+      localStorage.setItem('safepharm_user', JSON.stringify(newUser))
+    } else {
+      localStorage.removeItem('safepharm_user')
+    }
+  })
+
+  watch(currentRole, (newRole) => {
+    localStorage.setItem('safepharm_role', newRole)
+  })
+
+  // Trigger init immediately on startup if already authenticated
+  if (isAuthenticated.value) {
+    initializeStore()
+  }
 
   return {
     // Database tables
