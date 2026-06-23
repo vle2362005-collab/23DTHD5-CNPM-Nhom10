@@ -1119,25 +1119,73 @@ app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbCo
             }
         }
 
-        if (patient.IsPregnant)
-        {
-            var pregContra = dbContraindications.FirstOrDefault(c =>
-                c.ConditionType == "Đối tượng đặc biệt" &&
-                (c.MedicineId == cartIng.medicineId || c.IngredientId == cartIng.ingredientId)
-            );
+        var specialContras = dbContraindications.Where(c =>
+            c.ConditionType == "Đối tượng đặc biệt" &&
+            (c.MedicineId == cartIng.medicineId || c.IngredientId == cartIng.ingredientId)
+        ).ToList();
 
-            if (pregContra != null)
+        foreach (var contra in specialContras)
+        {
+            bool isPregnancyContra = true;
+            bool isBreastfeedingContra = true;
+
+            string combinedText = ((contra.Description ?? "") + " " + (contra.Recommendation ?? "")).ToLower();
+            if (!string.IsNullOrWhiteSpace(combinedText))
             {
-                var medName = dbMedicines.FirstOrDefault(m => m.MedicineId == cartIng.medicineId)?.MedicineName ?? "";
+                bool mentionsBreastfeeding = combinedText.Contains("cho con bú") || 
+                                             combinedText.Contains("sữa mẹ") || 
+                                             combinedText.Contains("nuôi con") || 
+                                             combinedText.Contains("breastfeed") || 
+                                             combinedText.Contains("lactat");
+                                             
+                bool mentionsPregnancy = combinedText.Contains("mang thai") || 
+                                         combinedText.Contains("thai kỳ") || 
+                                         combinedText.Contains("bà bầu") || 
+                                         combinedText.Contains("có thai") || 
+                                         combinedText.Contains("pregnant") || 
+                                         combinedText.Contains("thai nhi");
+
+                if (mentionsBreastfeeding && !mentionsPregnancy)
+                {
+                    isPregnancyContra = false;
+                }
+                if (mentionsPregnancy && !mentionsBreastfeeding)
+                {
+                    isBreastfeedingContra = false;
+                }
+            }
+
+            var medName = dbMedicines.FirstOrDefault(m => m.MedicineId == cartIng.medicineId)?.MedicineName ?? "";
+
+            if (patient.IsPregnant && isPregnancyContra)
+            {
                 generatedWarnings.Add(new Warning(
                     Random.Shared.Next(1000, 10000),
                     checkId,
                     patient.PatientId,
                     cartIng.medicineId,
                     "Đối tượng đặc biệt",
-                    pregContra.Severity,
-                    $"Thuốc [{medName}] chống chỉ định ở phụ nữ mang thai. {pregContra.Description}",
-                    pregContra.Recommendation,
+                    contra.Severity,
+                    $"Thuốc [{medName}] chống chỉ định ở phụ nữ mang thai. {contra.Description}",
+                    contra.Recommendation,
+                    false,
+                    null,
+                    null,
+                    null
+                ));
+            }
+
+            if (patient.IsBreastfeeding && isBreastfeedingContra)
+            {
+                generatedWarnings.Add(new Warning(
+                    Random.Shared.Next(1000, 10000),
+                    checkId,
+                    patient.PatientId,
+                    cartIng.medicineId,
+                    "Đối tượng đặc biệt",
+                    contra.Severity,
+                    $"Thuốc [{medName}] chống chỉ định ở phụ nữ cho con bú. {contra.Description}",
+                    contra.Recommendation,
                     false,
                     null,
                     null,
