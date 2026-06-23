@@ -1461,7 +1461,20 @@ app.MapPost("/api/sales", async (SaleRequest request, ClaimsPrincipal user, Phar
 
     if (hasWarnings && request.Warnings != null)
     {
-        var highestSeverity = request.Warnings.Count > 0 ? "Medium" : "None";
+        string highestSeverity = "None";
+        if (request.Warnings.Any(w => w.Severity == "Nghiêm trọng" || w.Severity == "High"))
+        {
+            highestSeverity = "Nghiêm trọng";
+        }
+        else if (request.Warnings.Any(w => w.Severity == "Trung bình" || w.Severity == "Medium"))
+        {
+            highestSeverity = "Trung bình";
+        }
+        else if (request.Warnings.Any())
+        {
+            highestSeverity = "Nhẹ";
+        }
+
         var dbCheck = new DbSafetyCheck
         {
             SaleId = dbSale.SaleId,
@@ -1475,6 +1488,12 @@ app.MapPost("/api/sales", async (SaleRequest request, ClaimsPrincipal user, Phar
 
         foreach (var w in request.Warnings)
         {
+            DateTime? ackAt = null;
+            if (!string.IsNullOrWhiteSpace(w.AcknowledgedAt) && DateTime.TryParse(w.AcknowledgedAt, out var parsedDate))
+            {
+                ackAt = parsedDate;
+            }
+
             var dbWarning = new DbWarning
             {
                 SafetyCheckId = dbCheck.SafetyCheckId,
@@ -1486,7 +1505,7 @@ app.MapPost("/api/sales", async (SaleRequest request, ClaimsPrincipal user, Phar
                 Recommendation = w.Recommendation,
                 IsAcknowledged = w.IsAcknowledged,
                 AcknowledgedBy = w.AcknowledgedBy ?? pharmacistId,
-                AcknowledgedAt = w.AcknowledgedAt != null ? DateTime.Parse(w.AcknowledgedAt) : null,
+                AcknowledgedAt = ackAt,
                 Decision = w.Decision,
                 CreatedAt = DateTime.Now
             };
