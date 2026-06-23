@@ -699,6 +699,7 @@ export const ApiService = {
           const ingA = cartIngredients[i]
           const ingB = cartIngredients[j]
           if (!ingA || !ingB) continue
+          if (ingA.medicineId === ingB.medicineId) continue
 
           const interact = localMocks.drugInteractions.find(di =>
             (di.IngredientAId === ingA.ingredientId && di.IngredientBId === ingB.ingredientId) ||
