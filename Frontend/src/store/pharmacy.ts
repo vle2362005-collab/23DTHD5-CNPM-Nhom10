@@ -410,38 +410,22 @@ export function usePharmacyStore() {
     allergies: { isIngredient: boolean; targetId: number; severity: string; note: string }[], 
     diseasesList: { diseaseId: number; note: string }[]
   ) => {
-    const newPat = await ApiService.createPatient({
-      ...patientData,
-      Phone: patientData.Phone || null,
-      Gender: patientData.Gender || null,
-      Address: patientData.Address || null,
-      Note: patientData.Note || null
-    })
-    patients.value.push(newPat)
+    const newPat = await ApiService.createPatient(
+      {
+        ...patientData,
+        Phone: patientData.Phone || null,
+        Gender: patientData.Gender || null,
+        Address: patientData.Address || null,
+        Note: patientData.Note || null
+      },
+      allergies,
+      diseasesList
+    )
 
-    // Clear and append allergies
-    patientAllergies.value = patientAllergies.value.filter(pa => pa.PatientId !== newPat.PatientId)
-    allergies.forEach(fa => {
-      patientAllergies.value.push({
-        AllergyId: Math.floor(Math.random() * 100000),
-        PatientId: newPat.PatientId,
-        IngredientId: fa.isIngredient ? fa.targetId : null,
-        MedicineId: !fa.isIngredient ? fa.targetId : null,
-        AllergyNote: fa.note,
-        Severity: fa.severity
-      })
-    })
-
-    // Clear and append diseases
-    patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== newPat.PatientId)
-    diseasesList.forEach(fd => {
-      patientDiseases.value.push({
-        PatientDiseaseId: Math.floor(Math.random() * 100000),
-        PatientId: newPat.PatientId,
-        DiseaseId: fd.diseaseId,
-        Note: fd.note
-      })
-    })
+    // Synchronize latest database state to store
+    patients.value = await ApiService.getPatients()
+    patientAllergies.value = await ApiService.getPatientAllergies()
+    patientDiseases.value = await ApiService.getPatientDiseases()
 
     return newPat
   }
@@ -452,46 +436,32 @@ export function usePharmacyStore() {
     allergies: { isIngredient: boolean; targetId: number; severity: string; note: string }[], 
     diseasesList: { diseaseId: number; note: string }[]
   ) => {
-    const updatedPat = await ApiService.updatePatient(patientId, {
-      ...patientData,
-      Phone: patientData.Phone || null,
-      Gender: patientData.Gender || null,
-      Address: patientData.Address || null,
-      Note: patientData.Note || null
-    })
-    const idx = patients.value.findIndex(p => p.PatientId === patientId)
-    if (idx !== -1) {
-      patients.value[idx] = updatedPat
-    }
+    await ApiService.updatePatient(
+      patientId,
+      {
+        ...patientData,
+        Phone: patientData.Phone || null,
+        Gender: patientData.Gender || null,
+        Address: patientData.Address || null,
+        Note: patientData.Note || null
+      },
+      allergies,
+      diseasesList
+    )
 
-    patientAllergies.value = patientAllergies.value.filter(pa => pa.PatientId !== patientId)
-    allergies.forEach(fa => {
-      patientAllergies.value.push({
-        AllergyId: Math.floor(Math.random() * 100000),
-        PatientId: patientId,
-        IngredientId: fa.isIngredient ? fa.targetId : null,
-        MedicineId: !fa.isIngredient ? fa.targetId : null,
-        AllergyNote: fa.note,
-        Severity: fa.severity
-      })
-    })
-
-    patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== patientId)
-    diseasesList.forEach(fd => {
-      patientDiseases.value.push({
-        PatientDiseaseId: Math.floor(Math.random() * 100000),
-        PatientId: patientId,
-        DiseaseId: fd.diseaseId,
-        Note: fd.note
-      })
-    })
+    // Synchronize latest database state to store
+    patients.value = await ApiService.getPatients()
+    patientAllergies.value = await ApiService.getPatientAllergies()
+    patientDiseases.value = await ApiService.getPatientDiseases()
   }
 
   const deletePatient = async (patientId: number) => {
     await ApiService.deletePatient(patientId)
-    patients.value = patients.value.filter(p => p.PatientId !== patientId)
-    patientAllergies.value = patientAllergies.value.filter(pa => pa.PatientId !== patientId)
-    patientDiseases.value = patientDiseases.value.filter(pd => pd.PatientId !== patientId)
+
+    // Synchronize latest database state to store
+    patients.value = await ApiService.getPatients()
+    patientAllergies.value = await ApiService.getPatientAllergies()
+    patientDiseases.value = await ApiService.getPatientDiseases()
   }
 
   const addMedicine = async (

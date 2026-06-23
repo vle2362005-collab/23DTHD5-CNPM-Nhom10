@@ -296,4 +296,71 @@ namespace Backend.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
+
+    [Table("Patients")]
+    public class DbPatient
+    {
+        [Key]
+        public int PatientId { get; set; }
+
+        [Required]
+        [StringLength(100)]
+        public string FullName { get; set; } = string.Empty;
+
+        [StringLength(20)]
+        public string? Phone { get; set; }
+
+        [StringLength(20)]
+        public string? Gender { get; set; }
+
+        public DateTime? DateOfBirth { get; set; }
+
+        [Column(TypeName = "decimal(5,2)")]
+        public decimal? WeightKg { get; set; }
+
+        [StringLength(255)]
+        public string? Address { get; set; }
+
+        public bool IsPregnant { get; set; } = false;
+
+        public bool IsBreastfeeding { get; set; } = false;
+
+        [StringLength(500)]
+        public string? Note { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+    }
+
+    [Table("PatientAllergies")]
+    public class DbPatientAllergy
+    {
+        [Key]
+        public int AllergyId { get; set; }
+
+        public int PatientId { get; set; }
+
+        public int? IngredientId { get; set; }
+
+        public int? MedicineId { get; set; }
+
+        [StringLength(500)]
+        public string? AllergyNote { get; set; }
+
+        [StringLength(50)]
+        public string? Severity { get; set; }
+    }
+
+    [Table("PatientDiseases")]
+    public class DbPatientDisease
+    {
+        [Key]
+        public int PatientDiseaseId { get; set; }
+
+        public int PatientId { get; set; }
+
+        public int DiseaseId { get; set; }
+
+        [StringLength(500)]
+        public string? Note { get; set; }
+    }
 }
