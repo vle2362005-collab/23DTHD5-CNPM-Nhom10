@@ -22,6 +22,9 @@ namespace Backend.Data
         public DbSet<DbSaleDetail> SaleDetails { get; set; } = null!;
         public DbSet<DbSafetyCheck> SafetyChecks { get; set; } = null!;
         public DbSet<DbWarning> Warnings { get; set; } = null!;
+        public DbSet<DbPatient> Patients { get; set; } = null!;
+        public DbSet<DbPatientAllergy> PatientAllergies { get; set; } = null!;
+        public DbSet<DbPatientDisease> PatientDiseases { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

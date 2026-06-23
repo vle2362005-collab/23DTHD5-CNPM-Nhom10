@@ -233,7 +233,24 @@ app.MapGet("/api/users", async (PharmacyDbContext db) =>
     ));
     return Results.Ok(userDtos);
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
-app.MapGet("/api/patients", () => Results.Ok(patients)).RequireAuthorization();
+app.MapGet("/api/patients", async (PharmacyDbContext db) =>
+{
+    var dbPatients = await db.Patients.ToListAsync();
+    var patientDtos = dbPatients.Select(p => new Patient(
+        p.PatientId,
+        p.FullName,
+        p.Phone,
+        p.Gender,
+        p.DateOfBirth?.ToString("yyyy-MM-dd") ?? string.Empty,
+        p.WeightKg,
+        p.Address,
+        p.IsPregnant,
+        p.IsBreastfeeding,
+        p.Note,
+        p.CreatedAt.ToString("yyyy-MM-dd")
+    ));
+    return Results.Ok(patientDtos);
+}).RequireAuthorization();
 app.MapGet("/api/druggroups", async (PharmacyDbContext db) =>
 {
     var dbGroups = await db.DrugGroups.ToListAsync();
@@ -333,8 +350,31 @@ app.MapGet("/api/diseases", async (PharmacyDbContext db) =>
     ));
     return Results.Ok(diseaseDtos);
 }).RequireAuthorization();
-app.MapGet("/api/patientdiseases", () => Results.Ok(patientDiseases)).RequireAuthorization();
-app.MapGet("/api/patientallergies", () => Results.Ok(patientAllergies)).RequireAuthorization();
+app.MapGet("/api/patientdiseases", async (PharmacyDbContext db) =>
+{
+    var dbPatientDiseases = await db.PatientDiseases.ToListAsync();
+    var diseaseDtos = dbPatientDiseases.Select(pd => new PatientDisease(
+        pd.PatientDiseaseId,
+        pd.PatientId,
+        pd.DiseaseId,
+        pd.Note
+    ));
+    return Results.Ok(diseaseDtos);
+}).RequireAuthorization();
+
+app.MapGet("/api/patientallergies", async (PharmacyDbContext db) =>
+{
+    var dbPatientAllergies = await db.PatientAllergies.ToListAsync();
+    var allergyDtos = dbPatientAllergies.Select(pa => new PatientAllergy(
+        pa.AllergyId,
+        pa.PatientId,
+        pa.IngredientId,
+        pa.MedicineId,
+        pa.AllergyNote,
+        pa.Severity
+    ));
+    return Results.Ok(allergyDtos);
+}).RequireAuthorization();
 app.MapGet("/api/druginteractions", async (PharmacyDbContext db) =>
 {
     var dbInteractions = await db.DrugInteractions.ToListAsync();
@@ -418,29 +458,186 @@ app.MapGet("/api/warnings", async (PharmacyDbContext db) =>
 }).RequireAuthorization();
 
 // Patient CRUD endpoints
-app.MapPost("/api/patients", (Patient patient) =>
+app.MapPost("/api/patients", async (CreateOrUpdatePatientRequest request, PharmacyDbContext db) =>
 {
-    var newId = patients.Any() ? patients.Max(p => p.PatientId) + 1 : 1;
-    var newPat = patient with { PatientId = newId, CreatedAt = DateTime.Now.ToString("yyyy-MM-dd") };
-    patients.Add(newPat);
-    return Results.Ok(newPat);
-}).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
+    DateTime? dob = null;
+    if (!string.IsNullOrEmpty(request.Patient.DateOfBirth))
+    {
+        if (DateTime.TryParse(request.Patient.DateOfBirth, out var parsedDob))
+        {
+            dob = parsedDob;
+        }
+    }
 
-app.MapPut("/api/patients/{id:int}", (int id, Patient patient) =>
-{
-    var idx = patients.FindIndex(p => p.PatientId == id);
-    if (idx < 0) return Results.NotFound("Patient not found");
-    patients[idx] = patient with { PatientId = id };
-    return Results.Ok(patients[idx]);
-}).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
+    var dbPatient = new DbPatient
+    {
+        FullName = request.Patient.FullName,
+        Phone = request.Patient.Phone,
+        Gender = request.Patient.Gender,
+        DateOfBirth = dob,
+        WeightKg = request.Patient.WeightKg,
+        Address = request.Patient.Address,
+        IsPregnant = request.Patient.IsPregnant,
+        IsBreastfeeding = request.Patient.IsBreastfeeding,
+        Note = request.Patient.Note,
+        CreatedAt = DateTime.Now
+    };
 
-app.MapDelete("/api/patients/{id:int}", (int id) =>
+    db.Patients.Add(dbPatient);
+    await db.SaveChangesAsync();
+
+    // Add allergies
+    foreach (var alg in request.Allergies)
+    {
+        var dbAllergy = new DbPatientAllergy
+        {
+            PatientId = dbPatient.PatientId,
+            IngredientId = alg.IsIngredient ? alg.TargetId : null,
+            MedicineId = !alg.IsIngredient ? alg.TargetId : null,
+            AllergyNote = alg.Note,
+            Severity = alg.Severity
+        };
+        db.PatientAllergies.Add(dbAllergy);
+    }
+
+    // Add diseases
+    foreach (var dis in request.Diseases)
+    {
+        var dbDisease = new DbPatientDisease
+        {
+            PatientId = dbPatient.PatientId,
+            DiseaseId = dis.DiseaseId,
+            Note = dis.Note
+        };
+        db.PatientDiseases.Add(dbDisease);
+    }
+
+    await db.SaveChangesAsync();
+
+    var resPatient = new Patient(
+        dbPatient.PatientId,
+        dbPatient.FullName,
+        dbPatient.Phone,
+        dbPatient.Gender,
+        dbPatient.DateOfBirth?.ToString("yyyy-MM-dd") ?? string.Empty,
+        dbPatient.WeightKg,
+        dbPatient.Address,
+        dbPatient.IsPregnant,
+        dbPatient.IsBreastfeeding,
+        dbPatient.Note,
+        dbPatient.CreatedAt.ToString("yyyy-MM-dd")
+    );
+
+    return Results.Ok(resPatient);
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager"));
+
+app.MapPut("/api/patients/{id:int}", async (int id, CreateOrUpdatePatientRequest request, PharmacyDbContext db) =>
 {
-    var idx = patients.FindIndex(p => p.PatientId == id);
-    if (idx < 0) return Results.NotFound("Patient not found");
-    patients.RemoveAt(idx);
+    var dbPatient = await db.Patients.FindAsync(id);
+    if (dbPatient == null) return Results.NotFound("Patient not found");
+
+    DateTime? dob = null;
+    if (!string.IsNullOrEmpty(request.Patient.DateOfBirth))
+    {
+        if (DateTime.TryParse(request.Patient.DateOfBirth, out var parsedDob))
+        {
+            dob = parsedDob;
+        }
+    }
+
+    dbPatient.FullName = request.Patient.FullName;
+    dbPatient.Phone = request.Patient.Phone;
+    dbPatient.Gender = request.Patient.Gender;
+    dbPatient.DateOfBirth = dob;
+    dbPatient.WeightKg = request.Patient.WeightKg;
+    dbPatient.Address = request.Patient.Address;
+    dbPatient.IsPregnant = request.Patient.IsPregnant;
+    dbPatient.IsBreastfeeding = request.Patient.IsBreastfeeding;
+    dbPatient.Note = request.Patient.Note;
+
+    // Clear old allergies & diseases
+    var oldAllergies = await db.PatientAllergies.Where(pa => pa.PatientId == id).ToListAsync();
+    db.PatientAllergies.RemoveRange(oldAllergies);
+
+    var oldDiseases = await db.PatientDiseases.Where(pd => pd.PatientId == id).ToListAsync();
+    db.PatientDiseases.RemoveRange(oldDiseases);
+
+    // Add new allergies
+    foreach (var alg in request.Allergies)
+    {
+        var dbAllergy = new DbPatientAllergy
+        {
+            PatientId = id,
+            IngredientId = alg.IsIngredient ? alg.TargetId : null,
+            MedicineId = !alg.IsIngredient ? alg.TargetId : null,
+            AllergyNote = alg.Note,
+            Severity = alg.Severity
+        };
+        db.PatientAllergies.Add(dbAllergy);
+    }
+
+    // Add new diseases
+    foreach (var dis in request.Diseases)
+    {
+        var dbDisease = new DbPatientDisease
+        {
+            PatientId = id,
+            DiseaseId = dis.DiseaseId,
+            Note = dis.Note
+        };
+        db.PatientDiseases.Add(dbDisease);
+    }
+
+    await db.SaveChangesAsync();
+
+    var resPatient = new Patient(
+        dbPatient.PatientId,
+        dbPatient.FullName,
+        dbPatient.Phone,
+        dbPatient.Gender,
+        dbPatient.DateOfBirth?.ToString("yyyy-MM-dd") ?? string.Empty,
+        dbPatient.WeightKg,
+        dbPatient.Address,
+        dbPatient.IsPregnant,
+        dbPatient.IsBreastfeeding,
+        dbPatient.Note,
+        dbPatient.CreatedAt.ToString("yyyy-MM-dd")
+    );
+
+    return Results.Ok(resPatient);
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager"));
+
+app.MapDelete("/api/patients/{id:int}", async (int id, PharmacyDbContext db) =>
+{
+    var dbPatient = await db.Patients.FindAsync(id);
+    if (dbPatient == null) return Results.NotFound("Patient not found");
+
+    // Explicit Cascade Deletion logic
+    var patientSales = await db.Sales.Where(s => s.PatientId == id).ToListAsync();
+    var saleIds = patientSales.Select(s => s.SaleId).ToList();
+
+    var saleDetails = await db.SaleDetails.Where(sd => saleIds.Contains(sd.SaleId)).ToListAsync();
+    db.SaleDetails.RemoveRange(saleDetails);
+
+    var safetyChecks = await db.SafetyChecks.Where(sc => saleIds.Contains(sc.SaleId)).ToListAsync();
+    db.SafetyChecks.RemoveRange(safetyChecks);
+
+    var warnings = await db.Warnings.Where(w => w.PatientId == id).ToListAsync();
+    db.Warnings.RemoveRange(warnings);
+
+    db.Sales.RemoveRange(patientSales);
+
+    var allergies = await db.PatientAllergies.Where(pa => pa.PatientId == id).ToListAsync();
+    db.PatientAllergies.RemoveRange(allergies);
+
+    var diseases = await db.PatientDiseases.Where(pd => pd.PatientId == id).ToListAsync();
+    db.PatientDiseases.RemoveRange(diseases);
+
+    db.Patients.Remove(dbPatient);
+    await db.SaveChangesAsync();
+
     return Results.Ok(new { success = true });
-}).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager"));
 
 // Medicine CRUD endpoints
 app.MapPost("/api/medicines", async (MedicineRequest request, PharmacyDbContext db) =>
@@ -657,7 +854,7 @@ app.MapDelete("/api/ingredients/{id:int}", async (int id, PharmacyDbContext db) 
 app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbContext db) =>
 {
     var generatedWarnings = new List<Warning>();
-    var patient = patients.FirstOrDefault(p => p.PatientId == request.PatientId);
+    var patient = await db.Patients.FirstOrDefaultAsync(p => p.PatientId == request.PatientId);
     if (patient == null) return Results.BadRequest("Patient not found");
 
     var checkId = Random.Shared.Next(1, 1000);
@@ -682,7 +879,7 @@ app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbCo
     }
 
     // 1. Patient Allergies check
-    var patientAllergiesData = patientAllergies.Where(pa => pa.PatientId == patient.PatientId).ToList();
+    var patientAllergiesData = await db.PatientAllergies.Where(pa => pa.PatientId == patient.PatientId).ToListAsync();
     foreach (var cartIng in cartIngredients)
     {
         var matchIng = patientAllergiesData.FirstOrDefault(pa => pa.IngredientId == cartIng.ingredientId);
@@ -743,7 +940,7 @@ app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbCo
     }
 
     // 3. Contraindications check
-    var patientDiseasesData = patientDiseases.Where(pd => pd.PatientId == patient.PatientId).ToList();
+    var patientDiseasesData = await db.PatientDiseases.Where(pd => pd.PatientId == patient.PatientId).ToListAsync();
     foreach (var cartIng in cartIngredients)
     {
         foreach (var pDisease in patientDiseasesData)
@@ -1206,6 +1403,36 @@ public record CartItemDto(int MedicineId, int Quantity, string DosageInstruction
 public record SafetyCheckRequest(int PatientId, List<CartItemDto> CartItems);
 public record SaleRequest(int PatientId, List<CartItemDto> CartItems, string FinalDecision, List<Warning>? Warnings, string? Note);
 public record LoginRequest(string Email, string Pin);
+
+public record PatientRequest(
+    string FullName,
+    string? Phone,
+    string? Gender,
+    string? DateOfBirth,
+    decimal? WeightKg,
+    string? Address,
+    bool IsPregnant,
+    bool IsBreastfeeding,
+    string? Note
+);
+
+public record PatientAllergyDto(
+    bool IsIngredient,
+    int TargetId,
+    string Severity,
+    string? Note
+);
+
+public record PatientDiseaseDto(
+    int DiseaseId,
+    string? Note
+);
+
+public record CreateOrUpdatePatientRequest(
+    PatientRequest Patient,
+    List<PatientAllergyDto> Allergies,
+    List<PatientDiseaseDto> Diseases
+);
 
 public record MedicineRequest(
     int? DrugGroupId, 
