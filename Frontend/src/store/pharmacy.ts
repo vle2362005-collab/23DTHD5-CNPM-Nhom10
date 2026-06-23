@@ -326,7 +326,7 @@ export function usePharmacyStore() {
     const w = safetyWarnings.value.find(warn => warn.WarningId === warningId)
     if (w) {
       w.IsAcknowledged = true
-      w.AcknowledgedBy = 2
+      w.AcknowledgedBy = currentUser.value?.UserId || 2
       w.AcknowledgedAt = new Date().toISOString().replace('T', ' ').substring(0, 19)
       w.Decision = decisionText
     }
