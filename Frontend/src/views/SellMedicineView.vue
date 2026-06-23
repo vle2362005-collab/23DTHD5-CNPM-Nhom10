@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { usePharmacyStore } from '../store/pharmacy'
+import { ApiService } from '../services/api'
 
 const store = usePharmacyStore()
 
 // Autocomplete Patient search states
 const patientSearchText = ref('')
 const showPatientSearchDropdown = ref(false)
+const patientSearchResults = ref<any[] | null>(null)
+const isSearchingPatients = ref(false)
+let patientDebounceTimeout: any = null
 
 // Initialize search text with active patient name if present
 watch(
@@ -19,7 +23,35 @@ watch(
   { immediate: true }
 )
 
+watch(patientSearchText, (newText) => {
+  if (patientDebounceTimeout) {
+    clearTimeout(patientDebounceTimeout)
+  }
+  const clean = newText.trim()
+  if (!clean) {
+    patientSearchResults.value = null
+    return
+  }
+  if (store.activePatient.value && store.activePatient.value.FullName === clean) {
+    patientSearchResults.value = null
+    return
+  }
+  patientDebounceTimeout = setTimeout(async () => {
+    isSearchingPatients.value = true
+    try {
+      patientSearchResults.value = await ApiService.getPatients(clean)
+    } catch (err) {
+      console.error('Error searching patients on sale screen:', err)
+    } finally {
+      isSearchingPatients.value = false
+    }
+  }, 300)
+})
+
 const filteredPatientsList = computed(() => {
+  if (patientSearchResults.value !== null) {
+    return patientSearchResults.value
+  }
   const query = patientSearchText.value.toLowerCase().trim()
   if (!query) return store.patients.value
   return store.patients.value.filter(
@@ -29,11 +61,17 @@ const filteredPatientsList = computed(() => {
 
 const selectPatientFromSearch = (patientId: number) => {
   store.selectedPatientId.value = patientId
-  const pat = store.patients.value.find(p => p.PatientId === patientId)
+  const source = patientSearchResults.value || store.patients.value
+  const pat = source.find(p => p.PatientId === patientId)
   if (pat) {
     patientSearchText.value = pat.FullName
+    const alreadyInStore = store.patients.value.some(p => p.PatientId === patientId)
+    if (!alreadyInStore) {
+      store.patients.value.push(pat)
+    }
   }
   showPatientSearchDropdown.value = false
+  patientSearchResults.value = null
 }
 
 // Autocomplete Medicine search states
