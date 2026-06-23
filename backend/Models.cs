@@ -91,4 +91,32 @@ namespace Backend.Models
         [StringLength(100)]
         public string? Amount { get; set; }
     }
+
+    [Table("DrugGroups")]
+    public class DbDrugGroup
+    {
+        [Key]
+        public int DrugGroupId { get; set; }
+
+        [Required]
+        [StringLength(150)]
+        public string GroupName { get; set; } = string.Empty;
+
+        [StringLength(500)]
+        public string? Description { get; set; }
+    }
+
+    [Table("ActiveIngredients")]
+    public class DbActiveIngredient
+    {
+        [Key]
+        public int IngredientId { get; set; }
+
+        [Required]
+        [StringLength(150)]
+        public string IngredientName { get; set; } = string.Empty;
+
+        [StringLength(500)]
+        public string? Description { get; set; }
+    }
 }
