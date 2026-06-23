@@ -201,8 +201,13 @@ export const ApiService = {
   },
 
   // Patients
-  async getPatients(): Promise<Patient[]> {
-    return apiGet<Patient[]>('/patients', localMocks.patients)
+  async getPatients(search?: string): Promise<Patient[]> {
+    const url = search ? `/patients?search=${encodeURIComponent(search)}` : '/patients'
+    return apiGet<Patient[]>(url, localMocks.patients.filter(p => {
+      if (!search) return true
+      const lower = search.toLowerCase().trim()
+      return p.FullName.toLowerCase().includes(lower) || (p.Phone && p.Phone.includes(lower))
+    }))
   },
   async createPatient(
     patient: Omit<Patient, 'PatientId' | 'CreatedAt'>,

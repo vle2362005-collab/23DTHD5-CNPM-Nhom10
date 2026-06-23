@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { usePharmacyStore, type Patient } from '../store/pharmacy'
+import { ApiService } from '../services/api'
 
 const store = usePharmacyStore()
 
@@ -33,6 +34,44 @@ const getInitials = (fullName: string) => {
 const searchQuery = ref('')
 const genderFilter = ref<string>('all')
 const specialConditionFilter = ref<string>('all')
+
+const searchResults = ref<Patient[] | null>(null)
+const isSearching = ref(false)
+let debounceTimeout: any = null
+
+const refreshSearch = async () => {
+  const cleanQuery = searchQuery.value.trim()
+  if (cleanQuery) {
+    try {
+      searchResults.value = await ApiService.getPatients(cleanQuery)
+    } catch (err) {
+      console.error('Error refreshing patients search:', err)
+    }
+  } else {
+    searchResults.value = null
+  }
+}
+
+watch(searchQuery, (newQuery) => {
+  if (debounceTimeout) {
+    clearTimeout(debounceTimeout)
+  }
+  const cleanQuery = newQuery.trim()
+  if (!cleanQuery) {
+    searchResults.value = null
+    return
+  }
+  debounceTimeout = setTimeout(async () => {
+    isSearching.value = true
+    try {
+      searchResults.value = await ApiService.getPatients(cleanQuery)
+    } catch (err) {
+      console.error('Error searching patients:', err)
+    } finally {
+      isSearching.value = false
+    }
+  }, 300)
+})
 
 // Modals State
 const showDetailModal = ref(false)
@@ -119,11 +158,12 @@ const getPatientSalesHistory = (patientId: number) => {
 
 // Filtered patients list
 const filteredPatients = computed(() => {
-  return store.patients.value.filter(p => {
-    // 1. Search Query (Name or Phone)
+  const baseList = searchResults.value !== null ? searchResults.value : store.patients.value
+  return baseList.filter(p => {
+    // 1. Search Query
     const query = searchQuery.value.toLowerCase().trim()
     let matchesSearch = true
-    if (query) {
+    if (!searchResults.value && query) {
       const nameMatch = p.FullName.toLowerCase().includes(query)
       const phoneMatch = p.Phone ? p.Phone.includes(query) : false
       matchesSearch = nameMatch || phoneMatch
@@ -319,6 +359,7 @@ const savePatient = async () => {
   }
 
   showFormModal.value = false
+  await refreshSearch()
   alert('Đã lưu thông tin hồ sơ bệnh án thành công!')
 }
 
@@ -327,6 +368,7 @@ const deletePatient = async (patient: Patient) => {
   if (!canManage.value) return
   if (confirm(`Bạn có chắc chắn muốn xóa hồ sơ của bệnh nhân "${patient.FullName}" khỏi hệ thống không?`)) {
     await store.deletePatient(patient.PatientId)
+    await refreshSearch()
     alert('Đã xóa hồ sơ bệnh nhân!')
   }
 }

@@ -233,9 +233,16 @@ app.MapGet("/api/users", async (PharmacyDbContext db) =>
     ));
     return Results.Ok(userDtos);
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
-app.MapGet("/api/patients", async (PharmacyDbContext db) =>
+
+app.MapGet("/api/patients", async (string? search, PharmacyDbContext db) =>
 {
-    var dbPatients = await db.Patients.ToListAsync();
+    var query = db.Patients.AsQueryable();
+    if (!string.IsNullOrEmpty(search))
+    {
+        var lowerSearch = search.ToLower().Trim();
+        query = query.Where(p => p.FullName.ToLower().Contains(lowerSearch) || (p.Phone != null && p.Phone.Contains(lowerSearch)));
+    }
+    var dbPatients = await query.ToListAsync();
     var patientDtos = dbPatients.Select(p => new Patient(
         p.PatientId,
         p.FullName,
@@ -251,6 +258,7 @@ app.MapGet("/api/patients", async (PharmacyDbContext db) =>
     ));
     return Results.Ok(patientDtos);
 }).RequireAuthorization();
+
 app.MapGet("/api/druggroups", async (PharmacyDbContext db) =>
 {
     var dbGroups = await db.DrugGroups.ToListAsync();
