@@ -341,12 +341,21 @@ export function usePharmacyStore() {
     finalDecision.value = 'Denied'
     showSafetyResultsModal.value = false
 
+    const cartItemsDto = prescriptionCart.value.map(item => ({
+      MedicineId: item.medicine.MedicineId,
+      Quantity: item.quantity,
+      DosageInstruction: item.dosageInstruction,
+      TimesPerDay: item.timesPerDay,
+      Duration: item.duration,
+      AdviceNote: item.adviceNote
+    }))
+
     try {
       const newSale = await ApiService.createPrescriptionSale(
         selectedPatientId.value,
-        [],
+        cartItemsDto,
         'Denied',
-        [],
+        safetyWarnings.value,
         'Bị từ chối do cảnh báo an toàn nghiêm trọng.'
       )
       sales.value.unshift(newSale)
