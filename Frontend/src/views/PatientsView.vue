@@ -5,6 +5,174 @@ import { ApiService } from '../services/api'
 
 const store = usePharmacyStore()
 
+// Sub-tab navigation selection state
+const activeSubTab = ref<'patients' | 'allergies'>('patients')
+
+// Centralized drug allergies management state
+const searchAllergyQuery = ref('')
+const severityFilter = ref<string>('all')
+const showAllergyModal = ref(false)
+const showEditAllergyModal = ref(false)
+const selectedAllergy = ref<any | null>(null)
+const allergyPatientId = ref<number | null>(null)
+const allergyIsIngredient = ref(true)
+const allergyTargetId = ref<number | null>(null)
+const allergySeverity = ref('Nghiêm trọng')
+const allergyNote = ref('')
+const modalPatientSearchQuery = ref('')
+
+const clearAllergyFilters = () => {
+  searchAllergyQuery.value = ''
+  severityFilter.value = 'all'
+}
+
+const filteredModalPatients = computed(() => {
+  const query = modalPatientSearchQuery.value.toLowerCase().trim()
+  if (!query) return store.patients.value
+  return store.patients.value.filter(p => 
+    p.FullName.toLowerCase().includes(query) || 
+    (p.Phone && p.Phone.includes(query))
+  )
+})
+
+const allAllergies = computed(() => {
+  return store.patientAllergies.value.map(pa => {
+    const patient = store.patients.value.find(p => p.PatientId === pa.PatientId)
+    let targetName = 'Không rõ'
+    if (pa.IngredientId) {
+      const ing = store.activeIngredients.value.find(i => i.IngredientId === pa.IngredientId)
+      targetName = ing ? ing.IngredientName : ''
+    } else if (pa.MedicineId) {
+      const med = store.medicines.value.find(m => m.MedicineId === pa.MedicineId)
+      targetName = med ? med.MedicineName : ''
+    }
+    return {
+      allergyId: pa.AllergyId,
+      patientId: pa.PatientId,
+      patientName: patient ? patient.FullName : 'Không rõ',
+      patientPhone: patient ? patient.Phone : '',
+      patientGender: patient ? patient.Gender || 'Nam' : 'Nam',
+      type: pa.IngredientId ? 'Hoạt chất' : 'Biệt dược',
+      isIngredient: !!pa.IngredientId,
+      targetId: pa.IngredientId || pa.MedicineId || 0,
+      targetName,
+      severity: pa.Severity || 'Nghiêm trọng',
+      note: pa.AllergyNote || ''
+    }
+  })
+})
+
+const filteredAllergies = computed(() => {
+  return allAllergies.value.filter(alg => {
+    // 1. Search Query
+    const query = searchAllergyQuery.value.toLowerCase().trim()
+    let matchesSearch = true
+    if (query) {
+      const nameMatch = alg.patientName.toLowerCase().includes(query)
+      const targetMatch = alg.targetName.toLowerCase().includes(query)
+      matchesSearch = nameMatch || targetMatch
+    }
+
+    // 2. Severity Filter
+    let matchesSeverity = true
+    if (severityFilter.value !== 'all') {
+      matchesSeverity = alg.severity === severityFilter.value
+    }
+
+    return matchesSearch && matchesSeverity
+  })
+})
+
+const openAddAllergy = () => {
+  if (!canManage.value) return
+  allergyPatientId.value = store.patients.value[0]?.PatientId || null
+  allergyIsIngredient.value = true
+  allergyTargetId.value = store.activeIngredients.value[0]?.IngredientId || null
+  allergySeverity.value = 'Nghiêm trọng'
+  allergyNote.value = ''
+  modalPatientSearchQuery.value = ''
+  showAllergyModal.value = true
+}
+
+const toggleCentralAllergyType = () => {
+  allergyIsIngredient.value = !allergyIsIngredient.value
+  if (allergyIsIngredient.value) {
+    allergyTargetId.value = store.activeIngredients.value[0]?.IngredientId || null
+  } else {
+    allergyTargetId.value = store.medicines.value[0]?.MedicineId || null
+  }
+}
+
+const saveAllergy = async () => {
+  if (!allergyPatientId.value) {
+    alert('Vui lòng chọn bệnh nhân!')
+    return
+  }
+  if (!allergyTargetId.value) {
+    alert('Vui lòng chọn tác nhân gây dị ứng!')
+    return
+  }
+
+  // Duplicate check
+  const exists = store.patientAllergies.value.some(pa => 
+    pa.PatientId === allergyPatientId.value &&
+    (allergyIsIngredient.value ? pa.IngredientId === allergyTargetId.value : pa.MedicineId === allergyTargetId.value)
+  )
+  if (exists) {
+    alert('Bệnh nhân này đã được khai báo dị ứng với tác nhân này rồi!')
+    return
+  }
+
+  try {
+    await store.addPatientAllergy({
+      PatientId: allergyPatientId.value,
+      IsIngredient: allergyIsIngredient.value,
+      TargetId: allergyTargetId.value,
+      Severity: allergySeverity.value,
+      Note: allergyNote.value.trim() || null
+    })
+    showAllergyModal.value = false
+    alert('Đã thêm dị ứng thuốc thành công!')
+  } catch (err: any) {
+    alert(err.message || 'Lỗi khi thêm dị ứng thuốc!')
+  }
+}
+
+const openEditAllergy = (allergy: any) => {
+  if (!canManage.value) return
+  selectedAllergy.value = allergy
+  allergySeverity.value = allergy.severity
+  allergyNote.value = allergy.note
+  showEditAllergyModal.value = true
+}
+
+const saveEditedAllergy = async () => {
+  if (!selectedAllergy.value) return
+
+  try {
+    await store.updatePatientAllergyStore(selectedAllergy.value.allergyId, {
+      Severity: allergySeverity.value,
+      AllergyNote: allergyNote.value.trim() || null
+    })
+    showEditAllergyModal.value = false
+    alert('Đã cập nhật thông tin dị ứng thành công!')
+  } catch (err: any) {
+    alert(err.message || 'Lỗi khi cập nhật dị ứng!')
+  }
+}
+
+const deleteAllergy = async (allergy: any) => {
+  if (!canManage.value) return
+  if (confirm(`Bạn có chắc chắn muốn xóa ghi nhận dị ứng [${allergy.targetName}] của bệnh nhân "${allergy.patientName}" khỏi hệ thống?`)) {
+    try {
+      await store.deletePatientAllergyStore(allergy.allergyId)
+      alert('Đã xóa ghi nhận dị ứng!')
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi xóa dị ứng!')
+    }
+  }
+}
+
 // Clinical statistics computations
 const totalPatientsCount = computed(() => store.patients.value.length)
 const pregnantCount = computed(() => store.patients.value.filter(p => p.IsPregnant).length)
@@ -376,7 +544,35 @@ const deletePatient = async (patient: Patient) => {
 
 <template>
   <div class="view-container">
-    <!-- Clinical Stats Dashboard -->
+    <!-- Sub tabs Selector -->
+    <div class="tabs-navigation">
+      <div class="tabs-list">
+        <button 
+          :class="['tab-btn', { active: activeSubTab === 'patients' }]" 
+          @click="activeSubTab = 'patients'"
+        >
+          <svg viewBox="0 0 24 24" class="tab-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          Hồ sơ bệnh nhân
+          <span class="tab-count-badge">{{ store.patients.value.length }}</span>
+        </button>
+        <button 
+          :class="['tab-btn', { active: activeSubTab === 'allergies' }]" 
+          @click="activeSubTab = 'allergies'"
+        >
+          <svg viewBox="0 0 24 24" class="tab-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Quản lý Dị ứng thuốc
+          <span class="tab-count-badge">{{ store.patientAllergies.value.length }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab 1: Patients Profiles Catalog -->
+    <div v-if="activeSubTab === 'patients'" class="sub-tab-content">
+      <!-- Clinical Stats Dashboard -->
     <div class="stats-dashboard-grid">
       <div class="stat-card total-patients">
         <div class="stat-icon-wrapper">
@@ -570,6 +766,124 @@ const deletePatient = async (patient: Patient) => {
           <span class="empty-icon">👥</span>
           <h4>Không tìm thấy bệnh nhân phù hợp</h4>
           <p>Hãy thử thay đổi điều kiện tìm kiếm hoặc bộ lọc.</p>
+        </div>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- Tab 2: Central Drug Allergies Catalog -->
+    <div v-else-if="activeSubTab === 'allergies'" class="sub-tab-content">
+      <!-- Filter & Search Panel for Allergies -->
+      <div class="grid-card search-filter-panel">
+        <div class="filters-row">
+          <!-- Search input -->
+          <div class="filter-col flex-1">
+            <label class="filter-label">Tìm kiếm dị ứng:</label>
+            <div class="search-input-wrapper">
+              <svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input 
+                type="text" 
+                placeholder="Nhập tên bệnh nhân hoặc tên tác nhân..." 
+                class="form-control form-control-with-icon"
+                v-model="searchAllergyQuery" 
+              />
+            </div>
+          </div>
+
+          <!-- Severity filter -->
+          <div class="filter-col">
+            <label class="filter-label">Mức độ nghiêm trọng:</label>
+            <select v-model="severityFilter" class="form-control select-control">
+              <option value="all">Tất cả mức độ</option>
+              <option value="Nghiêm trọng">Nghiêm trọng</option>
+              <option value="Trung bình">Trung bình</option>
+              <option value="Nhẹ">Nhẹ</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="panel-actions-row">
+          <button class="secondary-btn" @click="clearAllergyFilters" :disabled="!searchAllergyQuery && severityFilter === 'all'">
+            Xóa bộ lọc
+          </button>
+          <button class="primary-btn flex-center" v-if="canManage" @click="openAddAllergy">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" class="btn-icon">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Thêm dị ứng nhanh
+          </button>
+        </div>
+      </div>
+
+      <!-- Central Allergies Catalog List -->
+      <div class="grid-card patients-catalog-card" style="margin-top: 20px; overflow-x: auto;">
+        <h3 class="section-title" style="margin-bottom: 16px;">Danh mục dị ứng thuốc toàn hệ thống ({{ filteredAllergies.length }} ca dị ứng)</h3>
+        
+        <table class="data-table" v-if="filteredAllergies.length > 0">
+          <thead>
+            <tr>
+              <th>Bệnh nhân</th>
+              <th>Loại tác nhân</th>
+              <th>Tác nhân gây dị ứng</th>
+              <th>Mức độ nghiêm trọng</th>
+              <th>Ghi chú / Triệu chứng lâm sàng</th>
+              <th style="text-align: center;" v-if="canManage">Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="alg in filteredAllergies" :key="alg.allergyId">
+              <td>
+                <div class="patient-profile-cell">
+                  <div :class="['patient-avatar', alg.patientGender === 'Nữ' ? 'female' : 'male']">
+                    {{ getInitials(alg.patientName) }}
+                  </div>
+                  <div class="patient-name-cell">
+                    <span class="patient-title">{{ alg.patientName }}</span>
+                    <small class="patient-sub">{{ alg.patientPhone || 'Không có SĐT' }}</small>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="light-tag">{{ alg.type }}</span>
+              </td>
+              <td>
+                <strong class="text-main">{{ alg.targetName }}</strong>
+              </td>
+              <td>
+                <span :class="['status-tag', alg.severity === 'Nghiêm trọng' || alg.severity === 'High' ? 'danger' : alg.severity === 'Trung bình' ? 'warning' : 'safe']">
+                  {{ alg.severity }}
+                </span>
+              </td>
+              <td class="text-muted">{{ alg.note || '-' }}</td>
+              <td v-if="canManage">
+                <div class="action-buttons-group">
+                  <button class="action-btn-icon edit" @click="openEditAllergy(alg)" title="Chỉnh sửa mức độ/ghi chú">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button class="action-btn-icon delete" @click="deleteAllergy(alg)" title="Xóa ghi nhận dị ứng">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Empty state -->
+        <div class="empty-state-container flex-center" v-else>
+          <div class="empty-content">
+            <span class="empty-icon">🛡️</span>
+            <h4>Không tìm thấy ghi nhận dị ứng nào</h4>
+            <p>Hệ thống hiện tại chưa ghi nhận ca dị ứng nào khớp với bộ lọc.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -934,9 +1248,148 @@ const deletePatient = async (patient: Patient) => {
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ==========================================
+      MODAL 3: ADD ALLERGY FORM
+    ========================================== -->
+    <div class="modal-overlay flex-center" v-if="showAllergyModal">
+      <div class="modal-card form-modal" style="max-width: 550px;">
+        <div class="modal-header">
+          <div class="modal-title-area">
+            <h3>Khai báo dị ứng thuốc nhanh</h3>
+          </div>
+          <button class="close-modal-btn" @click="showAllergyModal = false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body scrollable-body">
+          <div class="form-inputs-grid" style="grid-template-columns: 1fr;">
+            <!-- Select Patient -->
+            <div class="form-group">
+              <label class="form-label required-label">Chọn bệnh nhân:</label>
+              <!-- Search patient inside modal -->
+              <input 
+                type="text" 
+                placeholder="Tìm nhanh bệnh nhân theo tên..." 
+                class="form-control" 
+                v-model="modalPatientSearchQuery"
+                style="margin-bottom: 8px;"
+              />
+              <select v-model="allergyPatientId" class="form-control select-control">
+                <option v-for="p in filteredModalPatients" :key="p.PatientId" :value="p.PatientId">
+                  {{ p.FullName }} (SĐT: {{ p.Phone || 'Không có' }})
+                </option>
+              </select>
+            </div>
+
+            <!-- Target Type Selector -->
+            <div class="form-group">
+              <label class="form-label">Loại tác nhân dị ứng:</label>
+              <div style="display: flex; gap: 12px; align-items: center;">
+                <button type="button" class="allergy-type-toggle-btn" @click="toggleCentralAllergyType" style="min-width: 120px;">
+                  {{ allergyIsIngredient ? 'Hoạt chất' : 'Biệt dược' }}
+                </button>
+                <small class="text-muted">Click để chuyển giữa nhóm Hoạt chất và thuốc Biệt dược.</small>
+              </div>
+            </div>
+
+            <!-- Allergen Target Select -->
+            <div class="form-group">
+              <label class="form-label required-label">Tác nhân gây dị ứng:</label>
+              <select v-if="allergyIsIngredient" v-model="allergyTargetId" class="form-control select-control">
+                <option v-for="ing in store.activeIngredients.value" :key="ing.IngredientId" :value="ing.IngredientId">
+                  {{ ing.IngredientName }}
+                </option>
+              </select>
+              <select v-else v-model="allergyTargetId" class="form-control select-control">
+                <option v-for="med in store.medicines.value" :key="med.MedicineId" :value="med.MedicineId">
+                  {{ med.MedicineName }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Severity Select -->
+            <div class="form-group">
+              <label class="form-label">Mức độ nghiêm trọng:</label>
+              <select v-model="allergySeverity" class="form-control select-control">
+                <option value="Nghiêm trọng">Nghiêm trọng</option>
+                <option value="Trung bình">Trung bình</option>
+                <option value="Nhẹ">Nhẹ</option>
+              </select>
+            </div>
+
+            <!-- Allergy Note -->
+            <div class="form-group">
+              <label class="form-label">Ghi chú triệu chứng lâm sàng:</label>
+              <textarea v-model="allergyNote" class="form-control textarea-control" rows="2" placeholder="Ví dụ: Nổi mề đay mẩn ngứa, buồn nôn, khó thở..."></textarea>
+            </div>
+          </div>
+        </div>
+
         <div class="modal-footer">
-          <button class="secondary-btn" @click="showFormModal = false">Hủy</button>
-          <button class="primary-btn" @click="savePatient">Lưu lại hồ sơ</button>
+          <button class="secondary-btn" @click="showAllergyModal = false">Hủy</button>
+          <button class="primary-btn" @click="saveAllergy">Ghi nhận dị ứng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+      MODAL 4: EDIT ALLERGY FORM
+    ========================================== -->
+    <div class="modal-overlay flex-center" v-if="showEditAllergyModal && selectedAllergy">
+      <div class="modal-card form-modal" style="max-width: 500px;">
+        <div class="modal-header">
+          <div class="modal-title-area">
+            <h3>Chỉnh sửa ghi nhận dị ứng</h3>
+          </div>
+          <button class="close-modal-btn" @click="showEditAllergyModal = false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body scrollable-body">
+          <div class="form-inputs-grid" style="grid-template-columns: 1fr;">
+            <!-- Display static info -->
+            <div class="form-group">
+              <label class="form-label">Bệnh nhân:</label>
+              <span class="detail-val-text">{{ selectedAllergy.patientName }}</span>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Tác nhân gây dị ứng:</label>
+              <span class="detail-val-text">{{ selectedAllergy.targetName }} ({{ selectedAllergy.type }})</span>
+            </div>
+
+            <!-- Severity Select -->
+            <div class="form-group">
+              <label class="form-label">Mức độ nghiêm trọng:</label>
+              <select v-model="allergySeverity" class="form-control select-control">
+                <option value="Nghiêm trọng">Nghiêm trọng</option>
+                <option value="Trung bình">Trung bình</option>
+                <option value="Nhẹ">Nhẹ</option>
+              </select>
+            </div>
+
+            <!-- Allergy Note -->
+            <div class="form-group">
+              <label class="form-label">Ghi chú triệu chứng lâm sàng:</label>
+              <textarea v-model="allergyNote" class="form-control textarea-control" rows="2" placeholder="Ví dụ: Nổi mề đay, mẩn ngứa..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="secondary-btn" @click="showEditAllergyModal = false">Hủy</button>
+          <button class="primary-btn" @click="saveEditedAllergy">Cập nhật</button>
         </div>
       </div>
     </div>
@@ -1750,5 +2203,70 @@ const deletePatient = async (patient: Patient) => {
   0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
   70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
   100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* Sub-tabs styling */
+.tabs-navigation {
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 2px;
+  margin-bottom: 8px;
+}
+
+.tabs-list {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-bottom: -4px;
+}
+
+.tab-btn:hover {
+  color: var(--primary-medium);
+  background-color: rgba(13, 148, 136, 0.03);
+  border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
+}
+
+.tab-btn.active {
+  color: var(--primary-medium);
+  border-bottom-color: var(--primary-medium);
+  font-weight: 700;
+}
+
+.tab-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.tab-count-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  background-color: var(--border-color);
+  color: var(--text-muted);
+  border-radius: var(--border-radius-full);
+}
+
+.tab-btn.active .tab-count-badge {
+  background-color: var(--primary-bg);
+  color: var(--primary-medium);
+}
+
+.sub-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 </style>

@@ -626,6 +626,54 @@ export function usePharmacyStore() {
     return success
   }
 
+  // Diseases Actions
+  const addDisease = async (diseaseData: Omit<Disease, 'DiseaseId'>) => {
+    const newDisease = await ApiService.createDisease(diseaseData)
+    diseases.value.push(newDisease)
+    return newDisease
+  }
+
+  const updateDiseaseStore = async (id: number, diseaseData: Disease) => {
+    const updated = await ApiService.updateDisease(id, diseaseData)
+    const idx = diseases.value.findIndex(d => d.DiseaseId === id)
+    if (idx !== -1) {
+      diseases.value[idx] = updated
+    }
+    return updated
+  }
+
+  const deleteDiseaseStore = async (id: number) => {
+    const success = await ApiService.deleteDisease(id)
+    if (success) {
+      diseases.value = diseases.value.filter(d => d.DiseaseId !== id)
+    }
+    return success
+  }
+
+  // PatientAllergies Actions
+  const addPatientAllergy = async (allergyData: { PatientId: number; IsIngredient: boolean; TargetId: number; Severity: string; Note: string | null }) => {
+    const newAllergy = await ApiService.createPatientAllergy(allergyData)
+    patientAllergies.value.push(newAllergy)
+    return newAllergy
+  }
+
+  const updatePatientAllergyStore = async (id: number, allergyData: { Severity: string; AllergyNote: string | null }) => {
+    const updated = await ApiService.updatePatientAllergy(id, allergyData)
+    const idx = patientAllergies.value.findIndex(pa => pa.AllergyId === id)
+    if (idx !== -1) {
+      patientAllergies.value[idx] = updated
+    }
+    return updated
+  }
+
+  const deletePatientAllergyStore = async (id: number) => {
+    const success = await ApiService.deletePatientAllergy(id)
+    if (success) {
+      patientAllergies.value = patientAllergies.value.filter(pa => pa.AllergyId !== id)
+    }
+    return success
+  }
+
   const hasInitialized = ref(false)
 
   const initializeStore = async () => {
@@ -819,6 +867,14 @@ export function usePharmacyStore() {
     addUser,
     updateUserStore,
     deleteUserStore,
-    initializeStore
+    initializeStore,
+
+    // Diseases & Allergies Actions
+    addDisease,
+    updateDiseaseStore,
+    deleteDiseaseStore,
+    addPatientAllergy,
+    updatePatientAllergyStore,
+    deletePatientAllergyStore
   }
 }

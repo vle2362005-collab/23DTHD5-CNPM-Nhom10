@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { usePharmacyStore, type DrugGroup, type ActiveIngredient } from '../store/pharmacy'
+import { usePharmacyStore, type DrugGroup, type ActiveIngredient, type Disease } from '../store/pharmacy'
 
 const store = usePharmacyStore()
 
 // Sub-tab selection state
-const activeSubTab = ref<'groups' | 'ingredients'>('groups')
+const activeSubTab = ref<'groups' | 'ingredients' | 'diseases'>('groups')
 
 // Search filter query
 const searchQuery = ref('')
@@ -13,11 +13,13 @@ const searchQuery = ref('')
 // Modals display state
 const showGroupModal = ref(false)
 const showIngredientModal = ref(false)
+const showDiseaseModal = ref(false)
 
 // Edit mode states
 const isEditing = ref(false)
 const selectedGroupId = ref<number | null>(null)
 const selectedIngredientId = ref<number | null>(null)
+const selectedDiseaseId = ref<number | null>(null)
 
 // Form inputs
 const groupName = ref('')
@@ -25,6 +27,9 @@ const groupDescription = ref('')
 
 const ingredientName = ref('')
 const ingredientDescription = ref('')
+
+const diseaseName = ref('')
+const diseaseDescription = ref('')
 
 // Authorization computed helper
 const canManage = computed(() => {
@@ -38,6 +43,10 @@ const getMedicineCountForGroup = (groupId: number) => {
 
 const getMedicineCountForIngredient = (ingredientId: number) => {
   return store.medicineIngredients.value.filter(mi => mi.IngredientId === ingredientId).length
+}
+
+const getPatientCountForDisease = (diseaseId: number) => {
+  return store.patientDiseases.value.filter(pd => pd.DiseaseId === diseaseId).length
 }
 
 // Filtered drug groups list
@@ -58,6 +67,17 @@ const filteredIngredients = computed(() => {
     return (
       ai.IngredientName.toLowerCase().includes(query) ||
       (ai.Description && ai.Description.toLowerCase().includes(query))
+    )
+  })
+})
+
+// Filtered diseases list
+const filteredDiseases = computed(() => {
+  const query = searchQuery.value.toLowerCase().trim()
+  return store.diseases.value.filter(d => {
+    return (
+      d.DiseaseName.toLowerCase().includes(query) ||
+      (d.Description && d.Description.toLowerCase().includes(query))
     )
   })
 })
@@ -199,6 +219,80 @@ const deleteIngredient = async (ingredient: ActiveIngredient) => {
     }
   }
 }
+
+// ==========================================
+// DISEASE HANDLERS
+// ==========================================
+const openAddDisease = () => {
+  if (!canManage.value) return
+  isEditing.value = false
+  selectedDiseaseId.value = null
+  diseaseName.value = ''
+  diseaseDescription.value = ''
+  showDiseaseModal.value = true
+}
+
+const openEditDisease = (disease: Disease) => {
+  if (!canManage.value) return
+  isEditing.value = true
+  selectedDiseaseId.value = disease.DiseaseId
+  diseaseName.value = disease.DiseaseName
+  diseaseDescription.value = disease.Description || ''
+  showDiseaseModal.value = true
+}
+
+const saveDisease = async () => {
+  if (!diseaseName.value.trim()) {
+    alert('Vui lòng nhập tên bệnh lý!')
+    return
+  }
+
+  const diseaseData = {
+    DiseaseName: diseaseName.value.trim(),
+    Description: diseaseDescription.value.trim() || null
+  }
+
+  try {
+    if (isEditing.value && selectedDiseaseId.value !== null) {
+      await store.updateDiseaseStore(selectedDiseaseId.value, {
+        DiseaseId: selectedDiseaseId.value,
+        ...diseaseData
+      })
+    } else {
+      await store.addDisease(diseaseData)
+    }
+    showDiseaseModal.value = false
+  } catch (err: any) {
+    alert(err.message || 'Lỗi khi lưu bệnh lý!')
+  }
+}
+
+const deleteDisease = async (disease: Disease) => {
+  if (!canManage.value) return
+
+  const patientCount = getPatientCountForDisease(disease.DiseaseId)
+  if (patientCount > 0) {
+    alert(`Không thể xóa! Có ${patientCount} bệnh nhân đang ghi nhận bệnh lý nền "${disease.DiseaseName}". Vui lòng cập nhật bệnh án của họ trước.`)
+    return
+  }
+
+  const contraCount = store.contraindications.value.filter(c => c.DiseaseId === disease.DiseaseId).length
+  if (contraCount > 0) {
+    alert(`Không thể xóa! Bệnh lý "${disease.DiseaseName}" đang được sử dụng trong cấu hình chống chỉ định của ${contraCount} loại thuốc.`)
+    return
+  }
+
+  if (confirm(`Bạn có chắc chắn muốn xóa bệnh lý nền "${disease.DiseaseName}"?`)) {
+    try {
+      const success = await store.deleteDiseaseStore(disease.DiseaseId)
+      if (!success) {
+        alert('Xóa thất bại! Không thể kết nối với API backend.')
+      }
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi xóa bệnh lý!')
+    }
+  }
+}
 </script>
 
 <template>
@@ -226,6 +320,16 @@ const deleteIngredient = async (ingredient: ActiveIngredient) => {
           Hoạt chất điều trị
           <span class="tab-count-badge">{{ store.activeIngredients.value.length }}</span>
         </button>
+        <button 
+          :class="['tab-btn', { active: activeSubTab === 'diseases' }]" 
+          @click="activeSubTab = 'diseases'"
+        >
+          <svg viewBox="0 0 24 24" class="tab-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+          Danh mục bệnh lý nền
+          <span class="tab-count-badge">{{ store.diseases.value.length }}</span>
+        </button>
       </div>
     </div>
 
@@ -241,7 +345,7 @@ const deleteIngredient = async (ingredient: ActiveIngredient) => {
             type="text" 
             class="search-input-small form-control-with-icon" 
             v-model="searchQuery" 
-            :placeholder="activeSubTab === 'groups' ? 'Tìm theo tên nhóm, mô tả...' : 'Tìm theo tên hoạt chất, mô tả...'"
+            :placeholder="activeSubTab === 'groups' ? 'Tìm theo tên nhóm, mô tả...' : activeSubTab === 'ingredients' ? 'Tìm theo tên hoạt chất, mô tả...' : 'Tìm theo tên bệnh lý, mô tả...'"
           />
         </div>
         
@@ -253,12 +357,19 @@ const deleteIngredient = async (ingredient: ActiveIngredient) => {
             </svg>
             Thêm nhóm thuốc
           </button>
-          <button v-else class="primary-btn add-btn" @click="openAddIngredient">
+          <button v-else-if="activeSubTab === 'ingredients'" class="primary-btn add-btn" @click="openAddIngredient">
             <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             Thêm hoạt chất
+          </button>
+          <button v-else class="primary-btn add-btn" @click="openAddDisease">
+            <svg viewBox="0 0 24 24" class="btn-icon" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Thêm bệnh nền
           </button>
         </div>
       </div>
@@ -311,7 +422,7 @@ const deleteIngredient = async (ingredient: ActiveIngredient) => {
       </div>
 
       <!-- Tab Content: Active Ingredients -->
-      <div v-else class="table-responsive">
+      <div v-else-if="activeSubTab === 'ingredients'" class="table-responsive">
         <table class="data-table">
           <thead>
             <tr>
@@ -351,6 +462,53 @@ const deleteIngredient = async (ingredient: ActiveIngredient) => {
             <tr v-if="filteredIngredients.length === 0">
               <td :colspan="canManage ? 5 : 4" class="empty-placeholder">
                 Không tìm thấy hoạt chất nào trùng khớp với từ khóa tìm kiếm.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tab Content: Pathological Diseases -->
+      <div v-else class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 80px;">Mã bệnh</th>
+              <th>Tên bệnh lý nền</th>
+              <th>Mô tả bệnh án</th>
+              <th style="width: 200px; text-align: center;">Bệnh nhân đang mắc</th>
+              <th v-if="canManage" style="width: 120px; text-align: center;">Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="disease in filteredDiseases" :key="disease.DiseaseId">
+              <td><strong>#{{ disease.DiseaseId }}</strong></td>
+              <td class="font-semibold text-primary">{{ disease.DiseaseName }}</td>
+              <td class="text-muted text-truncate-custom">{{ disease.Description || 'Không có mô tả chi tiết' }}</td>
+              <td style="text-align: center;">
+                <span :class="['medicine-badge', { 'zero': getPatientCountForDisease(disease.DiseaseId) === 0 }]">
+                  {{ getPatientCountForDisease(disease.DiseaseId) }} bệnh nhân
+                </span>
+              </td>
+              <td v-if="canManage" style="text-align: center;">
+                <div class="action-buttons-flex">
+                  <button class="action-edit-btn" @click="openEditDisease(disease)" title="Sửa bệnh lý">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                  </button>
+                  <button class="action-delete-btn" @click="deleteDisease(disease)" title="Xóa bệnh lý">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="filteredDiseases.length === 0">
+              <td :colspan="canManage ? 5 : 4" class="empty-placeholder">
+                Không tìm thấy bệnh lý nền nào trùng khớp với từ khóa tìm kiếm.
               </td>
             </tr>
           </tbody>
@@ -430,6 +588,45 @@ const deleteIngredient = async (ingredient: ActiveIngredient) => {
         <div class="modal-footer">
           <button class="secondary-btn" @click="showIngredientModal = false">Hủy bỏ</button>
           <button class="primary-btn" @click="saveIngredient">
+            {{ isEditing ? 'Cập nhật' : 'Thêm mới' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         MODAL FORM: DISEASE
+         ========================================== -->
+    <div v-if="showDiseaseModal" class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title">{{ isEditing ? 'Cập nhật Bệnh lý nền' : 'Thêm Bệnh lý nền mới' }}</h3>
+          <button class="close-btn" @click="showDiseaseModal = false">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label required">Tên bệnh lý nền</label>
+            <input 
+              type="text" 
+              class="form-control" 
+              v-model="diseaseName" 
+              placeholder="Ví dụ: Suy gan, Suy thận, Đái tháo đường..."
+              required
+            />
+          </div>
+          <div class="form-group" style="margin-top: 16px;">
+            <label class="form-label">Mô tả bệnh lý</label>
+            <textarea 
+              class="form-control" 
+              rows="4" 
+              v-model="diseaseDescription"
+              placeholder="Mô tả tóm tắt triệu chứng lâm sàng hoặc phân loại bệnh..."
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-btn" @click="showDiseaseModal = false">Hủy bỏ</button>
+          <button class="primary-btn" @click="saveDisease">
             {{ isEditing ? 'Cập nhật' : 'Thêm mới' }}
           </button>
         </div>
