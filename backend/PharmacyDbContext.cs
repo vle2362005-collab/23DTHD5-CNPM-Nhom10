@@ -15,6 +15,9 @@ namespace Backend.Data
         public DbSet<DbMedicineIngredient> MedicineIngredients { get; set; } = null!;
         public DbSet<DbDrugGroup> DrugGroups { get; set; } = null!;
         public DbSet<DbActiveIngredient> ActiveIngredients { get; set; } = null!;
+        public DbSet<DbDisease> Diseases { get; set; } = null!;
+        public DbSet<DbDrugInteraction> DrugInteractions { get; set; } = null!;
+        public DbSet<DbContraindication> Contraindications { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

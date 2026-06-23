@@ -587,6 +587,52 @@ export function usePharmacyStore() {
     return success
   }
 
+  const addDrugInteraction = async (data: Omit<DrugInteraction, 'InteractionId'>) => {
+    const newDi = await ApiService.createDrugInteraction(data)
+    drugInteractions.value.push(newDi)
+    return newDi
+  }
+
+  const updateDrugInteractionStore = async (id: number, data: DrugInteraction) => {
+    const updatedDi = await ApiService.updateDrugInteraction(id, data)
+    const idx = drugInteractions.value.findIndex(di => di.InteractionId === id)
+    if (idx !== -1) {
+      drugInteractions.value[idx] = updatedDi
+    }
+    return updatedDi
+  }
+
+  const deleteDrugInteractionStore = async (id: number) => {
+    const success = await ApiService.deleteDrugInteraction(id)
+    if (success) {
+      drugInteractions.value = drugInteractions.value.filter(di => di.InteractionId !== id)
+    }
+    return success
+  }
+
+  const addContraindication = async (data: Omit<Contraindication, 'ContraindicationId'>) => {
+    const newContra = await ApiService.createContraindication(data)
+    contraindications.value.push(newContra)
+    return newContra
+  }
+
+  const updateContraindicationStore = async (id: number, data: Contraindication) => {
+    const updatedContra = await ApiService.updateContraindication(id, data)
+    const idx = contraindications.value.findIndex(c => c.ContraindicationId === id)
+    if (idx !== -1) {
+      contraindications.value[idx] = updatedContra
+    }
+    return updatedContra
+  }
+
+  const deleteContraindicationStore = async (id: number) => {
+    const success = await ApiService.deleteContraindication(id)
+    if (success) {
+      contraindications.value = contraindications.value.filter(c => c.ContraindicationId !== id)
+    }
+    return success
+  }
+
   const addUser = async (userData: Omit<User, 'UserId' | 'CreatedAt'>) => {
     const newUser = await ApiService.createUser(userData)
     users.value.push(newUser)
@@ -794,6 +840,12 @@ export function usePharmacyStore() {
     addIngredient,
     updateIngredientStore,
     deleteIngredientStore,
+    addDrugInteraction,
+    updateDrugInteractionStore,
+    deleteDrugInteractionStore,
+    addContraindication,
+    updateContraindicationStore,
+    deleteContraindicationStore,
     addUser,
     updateUserStore,
     deleteUserStore,
