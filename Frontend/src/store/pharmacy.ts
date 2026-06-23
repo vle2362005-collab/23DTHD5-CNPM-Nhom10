@@ -575,12 +575,40 @@ export function usePharmacyStore() {
   }
 
   const login = async (email: string, phone: string): Promise<boolean> => {
-    // If not initialized, load users
+    // 1. Try real login API first
+    try {
+      const apiResult = await ApiService.loginApi(email, phone)
+      if (apiResult) {
+        const foundUser = apiResult.User
+        const token = apiResult.Token
+        
+        let roleKey: 'admin' | 'pharmacist' | 'manager' = 'pharmacist'
+        if (foundUser.RoleId === 1) roleKey = 'admin'
+        else if (foundUser.RoleId === 3) roleKey = 'manager'
+        
+        isAuthenticated.value = true
+        currentUser.value = foundUser
+        currentRole.value = roleKey
+        
+        localStorage.setItem('safepharm_auth', 'true')
+        localStorage.setItem('safepharm_user', JSON.stringify(foundUser))
+        localStorage.setItem('safepharm_role', roleKey)
+        localStorage.setItem('safepharm_token', token)
+        
+        // Re-initialize store tables with the new token
+        hasInitialized.value = false
+        await initializeStore()
+        return true
+      }
+    } catch (err) {
+      console.warn('[Store] API login failed, falling back to local simulation:', err)
+    }
+
+    // 2. Fallback to local simulation
     if (users.value.length === 0) {
       await initializeStore()
     }
     
-    // Find matching user (case-insensitive for email, matching phone or PIN '123456' for test convenience)
     const foundUser = users.value.find(u => 
       u.Email.toLowerCase() === email.trim().toLowerCase() && 
       (u.Phone === phone.trim() || phone.trim() === '123456')
@@ -598,6 +626,7 @@ export function usePharmacyStore() {
       localStorage.setItem('safepharm_auth', 'true')
       localStorage.setItem('safepharm_user', JSON.stringify(foundUser))
       localStorage.setItem('safepharm_role', roleKey)
+      localStorage.setItem('safepharm_token', 'mock-local-token')
       return true
     }
     return false
@@ -611,6 +640,7 @@ export function usePharmacyStore() {
     localStorage.removeItem('safepharm_auth')
     localStorage.removeItem('safepharm_user')
     localStorage.removeItem('safepharm_role')
+    localStorage.removeItem('safepharm_token')
   }
 
   // Trigger init immediately on startup
