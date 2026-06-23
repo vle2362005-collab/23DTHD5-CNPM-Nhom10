@@ -82,10 +82,19 @@ const localMocks = {
   ] as Contraindication[],
 
   sales: [
-    { SaleId: 1, PatientId: 1, PharmacistId: 2, PrescriptionId: 1, TotalAmount: 7000, FinalDecision: 'Approved', Status: 'Completed', SaleDate: '2026-06-21 14:23', Note: 'Phieu ban thuoc demo' }
+    { SaleId: 1, PatientId: 1, PharmacistId: 2, PrescriptionId: 1, TotalAmount: 7000, FinalDecision: 'Approved', Status: 'Completed', SaleDate: '2026-06-21 14:23', Note: 'Phiếu bán thuốc demo' },
+    { SaleId: 2, PatientId: 2, PharmacistId: 2, PrescriptionId: null, TotalAmount: 185000, FinalDecision: 'Approved', Status: 'Completed', SaleDate: '2026-06-22 09:15', Note: 'Bán lẻ dược phẩm điều trị' },
+    { SaleId: 3, PatientId: 1, PharmacistId: 2, PrescriptionId: null, TotalAmount: 320000, FinalDecision: 'Approved', Status: 'Completed', SaleDate: '2026-06-23 10:30', Note: 'Bán an toàn thông thường.' },
+    { SaleId: 4, PatientId: 2, PharmacistId: 3, PrescriptionId: null, TotalAmount: 95000, FinalDecision: 'Denied', Status: 'Cancelled', SaleDate: '2026-06-20 16:45', Note: 'Bị từ chối do cảnh báo an toàn nghiêm trọng.' },
+    { SaleId: 5, PatientId: 1, PharmacistId: 2, PrescriptionId: null, TotalAmount: 150000, FinalDecision: 'Approved', Status: 'Completed', SaleDate: '2026-06-18 08:20', Note: 'Đơn thuốc xuất viện' },
+    { SaleId: 6, PatientId: 2, PharmacistId: 2, PrescriptionId: null, TotalAmount: 420000, FinalDecision: 'Approved', Status: 'Completed', SaleDate: '2026-06-19 14:10', Note: 'Bán sau khi duyệt cảnh báo.' }
   ] as Sale[],
 
-  warnings: [] as Warning[]
+  warnings: [
+    { WarningId: 1, SafetyCheckId: 101, PatientId: 2, MedicineId: 3, WarningType: 'Dị ứng thuốc', Severity: 'Nghiêm trọng', Message: 'Bệnh nhân dị ứng trực tiếp với biệt dược [Ibuprofen 400mg].', Recommendation: 'Cân nhắc đổi sang Paracetamol.', IsAcknowledged: true, AcknowledgedBy: 2, AcknowledgedAt: '2026-06-22 09:15', Decision: 'Đã liên hệ bác sĩ và đổi sang hoạt chất giảm đau khác.' },
+    { WarningId: 2, SafetyCheckId: 102, PatientId: 1, MedicineId: 2, WarningType: 'Tương tác thuốc', Severity: 'Trung bình', Message: 'Tương tác giữa [Amoxicillin 500mg] và [Ibuprofen 400mg].', Recommendation: 'Cần tư vấn và theo dõi triệu chứng bất thường.', IsAcknowledged: true, AcknowledgedBy: 2, AcknowledgedAt: '2026-06-23 10:30', Decision: 'Bệnh nhân cam kết dùng cách nhau 2 giờ.' },
+    { WarningId: 3, SafetyCheckId: 103, PatientId: 2, MedicineId: 3, WarningType: 'Chống chỉ định bệnh nền', Severity: 'Nghiêm trọng', Message: 'Thuốc [Ibuprofen 400mg] chống chỉ định ở người có bệnh nền [Viêm loét dạ dày].', Recommendation: 'Cần đổi sang thuốc khác an toàn hơn.', IsAcknowledged: false, AcknowledgedBy: null, AcknowledgedAt: null, Decision: null }
+  ] as Warning[]
 }
 
 // Check server status
