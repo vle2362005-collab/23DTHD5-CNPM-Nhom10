@@ -858,6 +858,119 @@ app.MapDelete("/api/ingredients/{id:int}", async (int id, PharmacyDbContext db) 
     return Results.Ok(new { success = true });
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
+// Disease CRUD endpoints
+app.MapPost("/api/diseases", async (DiseaseRequest request, PharmacyDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(request.DiseaseName))
+    {
+        return Results.BadRequest("Tên bệnh lý không được để trống.");
+    }
+    var dbDisease = new DbDisease
+    {
+        DiseaseName = request.DiseaseName,
+        Description = request.Description
+    };
+    db.Diseases.Add(dbDisease);
+    await db.SaveChangesAsync();
+    return Results.Ok(new Disease(dbDisease.DiseaseId, dbDisease.DiseaseName, dbDisease.Description));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapPut("/api/diseases/{id:int}", async (int id, DiseaseRequest request, PharmacyDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(request.DiseaseName))
+    {
+        return Results.BadRequest("Tên bệnh lý không được để trống.");
+    }
+    var dbDisease = await db.Diseases.FindAsync(id);
+    if (dbDisease == null) return Results.NotFound("Không tìm thấy bệnh lý.");
+
+    dbDisease.DiseaseName = request.DiseaseName;
+    dbDisease.Description = request.Description;
+    await db.SaveChangesAsync();
+    return Results.Ok(new Disease(dbDisease.DiseaseId, dbDisease.DiseaseName, dbDisease.Description));
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+app.MapDelete("/api/diseases/{id:int}", async (int id, PharmacyDbContext db) =>
+{
+    var dbDisease = await db.Diseases.FindAsync(id);
+    if (dbDisease == null) return Results.NotFound("Không tìm thấy bệnh lý.");
+
+    var isAssocPatient = await db.PatientDiseases.AnyAsync(pd => pd.DiseaseId == id);
+    if (isAssocPatient)
+    {
+        return Results.BadRequest("Không thể xóa bệnh lý này vì đang có hồ sơ bệnh nhân tham chiếu.");
+    }
+
+    var isAssocContra = await db.Contraindications.AnyAsync(c => c.DiseaseId == id);
+    if (isAssocContra)
+    {
+        return Results.BadRequest("Không thể xóa bệnh lý này vì đang có cấu hình chống chỉ định tham chiếu.");
+    }
+
+    db.Diseases.Remove(dbDisease);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { success = true });
+}).RequireAuthorization(policy => policy.RequireRole("admin"));
+
+// Patient Allergy CRUD endpoints
+app.MapPost("/api/patientallergies", async (PatientAllergyRequest request, PharmacyDbContext db) =>
+{
+    var patientExists = await db.Patients.AnyAsync(p => p.PatientId == request.PatientId);
+    if (!patientExists) return Results.BadRequest("Bệnh nhân không tồn tại.");
+
+    var dbAllergy = new DbPatientAllergy
+    {
+        PatientId = request.PatientId,
+        IngredientId = request.IsIngredient ? request.TargetId : null,
+        MedicineId = !request.IsIngredient ? request.TargetId : null,
+        Severity = request.Severity,
+        AllergyNote = request.Note
+    };
+
+    db.PatientAllergies.Add(dbAllergy);
+    await db.SaveChangesAsync();
+
+    var allergyDto = new PatientAllergy(
+        dbAllergy.AllergyId,
+        dbAllergy.PatientId,
+        dbAllergy.IngredientId,
+        dbAllergy.MedicineId,
+        dbAllergy.AllergyNote,
+        dbAllergy.Severity
+    );
+    return Results.Ok(allergyDto);
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager"));
+
+app.MapPut("/api/patientallergies/{id:int}", async (int id, UpdatePatientAllergyRequest request, PharmacyDbContext db) =>
+{
+    var dbAllergy = await db.PatientAllergies.FindAsync(id);
+    if (dbAllergy == null) return Results.NotFound("Không tìm thấy thông tin dị ứng.");
+
+    dbAllergy.Severity = request.Severity;
+    dbAllergy.AllergyNote = request.AllergyNote;
+    await db.SaveChangesAsync();
+
+    var allergyDto = new PatientAllergy(
+        dbAllergy.AllergyId,
+        dbAllergy.PatientId,
+        dbAllergy.IngredientId,
+        dbAllergy.MedicineId,
+        dbAllergy.AllergyNote,
+        dbAllergy.Severity
+    );
+    return Results.Ok(allergyDto);
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager"));
+
+app.MapDelete("/api/patientallergies/{id:int}", async (int id, PharmacyDbContext db) =>
+{
+    var dbAllergy = await db.PatientAllergies.FindAsync(id);
+    if (dbAllergy == null) return Results.NotFound("Không tìm thấy thông tin dị ứng.");
+
+    db.PatientAllergies.Remove(dbAllergy);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { success = true });
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager"));
+
 // Safety Check Endpoint
 app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbContext db) =>
 {
@@ -1460,3 +1573,7 @@ public record ActiveIngredientRequest(string IngredientName, string? Description
 public record DrugInteractionRequest(int IngredientAId, int IngredientBId, string Severity, string? Description, string? Recommendation);
 public record ContraindicationRequest(int? MedicineId, int? IngredientId, int? DiseaseId, string? ConditionType, string Severity, string? Description, string? Recommendation);
 public record AcknowledgeWarningRequest(int AcknowledgedBy, string Decision);
+
+public record DiseaseRequest(string DiseaseName, string? Description);
+public record PatientAllergyRequest(int PatientId, bool IsIngredient, int TargetId, string Severity, string? Note);
+public record UpdatePatientAllergyRequest(string Severity, string? AllergyNote);
