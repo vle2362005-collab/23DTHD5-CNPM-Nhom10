@@ -757,30 +757,74 @@ export const ApiService = {
           }
         })
 
-        if (patient.IsPregnant) {
-          const pregContra = localMocks.contraindications.find(c =>
-            c.ConditionType === 'Đối tượng đặc biệt' &&
-            (c.MedicineId === cartIng.medicineId || c.IngredientId === cartIng.ingredientId)
-          )
+        const specialContras = localMocks.contraindications.filter(c =>
+          c.ConditionType === 'Đối tượng đặc biệt' &&
+          (c.MedicineId === cartIng.medicineId || c.IngredientId === cartIng.ingredientId)
+        )
 
-          if (pregContra) {
-            const medName = localMocks.medicines.find(m => m.MedicineId === cartIng.medicineId)?.MedicineName || ''
+        specialContras.forEach(contra => {
+          let isPregnancyContra = true
+          let isBreastfeedingContra = true
+
+          const combinedText = ((contra.Description || '') + ' ' + (contra.Recommendation || '')).toLowerCase()
+          if (combinedText.trim()) {
+            const mentionsBreastfeeding = combinedText.includes('cho con bú') || 
+                                         combinedText.includes('sữa mẹ') || 
+                                         combinedText.includes('nuôi con') || 
+                                         combinedText.includes('breastfeed') || 
+                                         combinedText.includes('lactat')
+                                         
+            const mentionsPregnancy = combinedText.includes('mang thai') || 
+                                     combinedText.includes('thai kỳ') || 
+                                     combinedText.includes('bà bầu') || 
+                                     combinedText.includes('có thai') || 
+                                     combinedText.includes('pregnant') || 
+                                     combinedText.includes('thai nhi')
+
+            if (mentionsBreastfeeding && !mentionsPregnancy) {
+              isPregnancyContra = false
+            }
+            if (mentionsPregnancy && !mentionsBreastfeeding) {
+              isBreastfeedingContra = false
+            }
+          }
+
+          const medName = localMocks.medicines.find(m => m.MedicineId === cartIng.medicineId)?.MedicineName || ''
+
+          if (patient.IsPregnant && isPregnancyContra) {
             generatedWarnings.push({
               WarningId: Math.floor(Math.random() * 10000),
               SafetyCheckId: checkId,
               PatientId: patientId,
               MedicineId: cartIng.medicineId,
               WarningType: 'Đối tượng đặc biệt',
-              Severity: pregContra.Severity,
-              Message: `Thuốc [${medName}] chống chỉ định ở phụ nữ mang thai. ${pregContra.Description}`,
-              Recommendation: pregContra.Recommendation,
+              Severity: contra.Severity,
+              Message: `Thuốc [${medName}] chống chỉ định ở phụ nữ mang thai. ${contra.Description}`,
+              Recommendation: contra.Recommendation,
               IsAcknowledged: false,
               AcknowledgedBy: null,
               AcknowledgedAt: null,
               Decision: null
             })
           }
-        }
+
+          if (patient.IsBreastfeeding && isBreastfeedingContra) {
+            generatedWarnings.push({
+              WarningId: Math.floor(Math.random() * 10000),
+              SafetyCheckId: checkId,
+              PatientId: patientId,
+              MedicineId: cartIng.medicineId,
+              WarningType: 'Đối tượng đặc biệt',
+              Severity: contra.Severity,
+              Message: `Thuốc [${medName}] chống chỉ định ở phụ nữ cho con bú. ${contra.Description}`,
+              Recommendation: contra.Recommendation,
+              IsAcknowledged: false,
+              AcknowledgedBy: null,
+              AcknowledgedAt: null,
+              Decision: null
+            })
+          }
+        })
       })
 
       // 4. Prescription Required
