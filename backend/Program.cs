@@ -1246,7 +1246,7 @@ app.MapPost("/api/safety-check", async (SafetyCheckRequest request, PharmacyDbCo
     var highestSeverity = generatedWarnings.Count > 0 ? "Medium" : "None";
     var result = generatedWarnings.Count > 0 ? "Warning" : "Approved";
     return Results.Ok(new { warnings = generatedWarnings, highestSeverity, result });
-}).RequireAuthorization(policy => policy.RequireRole("admin", "pharmacist"));
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager", "pharmacist"));
 
 // Drug Interactions CRUD endpoints
 app.MapPost("/api/druginteractions", async (DrugInteractionRequest request, PharmacyDbContext db) =>
@@ -1410,8 +1410,11 @@ app.MapDelete("/api/contraindications/{id:int}", async (int id, PharmacyDbContex
     return Results.Ok(new { success = true });
 }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
-app.MapPost("/api/sales", async (SaleRequest request, PharmacyDbContext db) =>
+app.MapPost("/api/sales", async (SaleRequest request, ClaimsPrincipal user, PharmacyDbContext db) =>
 {
+    var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    int pharmacistId = int.TryParse(userIdClaim, out var parsedId) ? parsedId : 2;
+
     var totalAmount = request.CartItems.Sum(item =>
     {
         var price = db.Medicines.FirstOrDefault(m => m.MedicineId == item.MedicineId)?.Price ?? 0;
@@ -1426,7 +1429,7 @@ app.MapPost("/api/sales", async (SaleRequest request, PharmacyDbContext db) =>
     var dbSale = new DbSale
     {
         PatientId = request.PatientId,
-        PharmacistId = 2, // Ds. Trần Thị Mai
+        PharmacistId = pharmacistId,
         PrescriptionId = null,
         SaleDate = DateTime.Now,
         TotalAmount = totalAmount,
@@ -1482,7 +1485,7 @@ app.MapPost("/api/sales", async (SaleRequest request, PharmacyDbContext db) =>
                 Message = w.Message,
                 Recommendation = w.Recommendation,
                 IsAcknowledged = w.IsAcknowledged,
-                AcknowledgedBy = w.AcknowledgedBy,
+                AcknowledgedBy = w.AcknowledgedBy ?? pharmacistId,
                 AcknowledgedAt = w.AcknowledgedAt != null ? DateTime.Parse(w.AcknowledgedAt) : null,
                 Decision = w.Decision,
                 CreatedAt = DateTime.Now
@@ -1505,7 +1508,7 @@ app.MapPost("/api/sales", async (SaleRequest request, PharmacyDbContext db) =>
     );
 
     return Results.Ok(saleDto);
-}).RequireAuthorization(policy => policy.RequireRole("pharmacist"));
+}).RequireAuthorization(policy => policy.RequireRole("admin", "manager", "pharmacist"));
 
 app.MapPut("/api/warnings/{id:int}/acknowledge", async (int id, AcknowledgeWarningRequest request, PharmacyDbContext db) =>
 {
