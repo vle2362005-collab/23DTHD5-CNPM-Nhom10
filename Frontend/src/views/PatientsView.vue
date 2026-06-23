@@ -4,6 +4,31 @@ import { usePharmacyStore, type Patient } from '../store/pharmacy'
 
 const store = usePharmacyStore()
 
+// Clinical statistics computations
+const totalPatientsCount = computed(() => store.patients.value.length)
+const pregnantCount = computed(() => store.patients.value.filter(p => p.IsPregnant).length)
+const breastfeedingCount = computed(() => store.patients.value.filter(p => p.IsBreastfeeding).length)
+const allergicPatientsCount = computed(() => {
+  const allergyPatientIds = new Set(store.patientAllergies.value.map(pa => pa.PatientId))
+  return store.patients.value.filter(p => allergyPatientIds.has(p.PatientId)).length
+})
+
+// Helper to get patient initials
+const getInitials = (fullName: string) => {
+  if (!fullName) return '?'
+  const parts = fullName.trim().split(/\s+/)
+  if (parts.length === 1) {
+    const firstWord = parts[0]
+    return firstWord && firstWord.length > 0 ? firstWord.charAt(0).toUpperCase() : '?'
+  }
+  const firstWord = parts[0]
+  const lastWord = parts[parts.length - 1]
+  if (firstWord && lastWord && firstWord.length > 0 && lastWord.length > 0) {
+    return (firstWord.charAt(0) + lastWord.charAt(0)).toUpperCase()
+  }
+  return '?'
+}
+
 // State for search and filters
 const searchQuery = ref('')
 const genderFilter = ref<string>('all')
@@ -309,6 +334,53 @@ const deletePatient = async (patient: Patient) => {
 
 <template>
   <div class="view-container">
+    <!-- Clinical Stats Dashboard -->
+    <div class="stats-dashboard-grid">
+      <div class="stat-card total-patients">
+        <div class="stat-icon-wrapper">
+          <svg viewBox="0 0 24 24" class="stat-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Tổng bệnh nhân</span>
+          <span class="stat-value">{{ totalPatientsCount }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card pregnant-patients">
+        <div class="stat-icon-wrapper">
+          <span class="stat-emoji">🤰</span>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Thai kỳ lưu ý</span>
+          <span class="stat-value">{{ pregnantCount }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card breastfeeding-patients">
+        <div class="stat-icon-wrapper">
+          <span class="stat-emoji">🍼</span>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Nuôi con nhỏ</span>
+          <span class="stat-value">{{ breastfeedingCount }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card allergic-patients">
+        <div class="stat-icon-wrapper">
+          <svg viewBox="0 0 24 24" class="stat-icon warning" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Tiền sử dị ứng</span>
+          <span class="stat-value">{{ allergicPatientsCount }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Filter & Search Panel -->
     <div class="grid-card search-filter-panel">
       <div class="filters-row">
@@ -316,15 +388,15 @@ const deletePatient = async (patient: Patient) => {
         <div class="filter-col flex-1">
           <label class="filter-label">Tìm kiếm bệnh nhân:</label>
           <div class="search-input-wrapper">
-            <input 
-              type="text" 
-              placeholder="Nhập họ tên hoặc số điện thoại..." 
-              class="form-control"
-              v-model="searchQuery" 
-            />
             <svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
+            <input 
+              type="text" 
+              placeholder="Nhập họ tên hoặc số điện thoại..." 
+              class="form-control form-control-with-icon"
+              v-model="searchQuery" 
+            />
           </div>
         </div>
 
@@ -332,7 +404,7 @@ const deletePatient = async (patient: Patient) => {
         <div class="filter-col">
           <label class="filter-label">Giới tính:</label>
           <select v-model="genderFilter" class="form-control select-control">
-            <option value="all">Tất cả</option>
+            <option value="all">Tất cả giới tính</option>
             <option value="Nam">Nam</option>
             <option value="Nữ">Nữ</option>
           </select>
@@ -356,22 +428,22 @@ const deletePatient = async (patient: Patient) => {
           Xóa bộ lọc
         </button>
         <button class="primary-btn flex-center" v-if="canManage" @click="openAddForm">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" class="btn-icon">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
-          Thêm hồ sơ mới (Patients)
+          Thêm hồ sơ mới
         </button>
       </div>
     </div>
 
     <!-- Patients Catalog List -->
-    <div class="grid-card" style="margin-top: 20px; overflow-x: auto;">
+    <div class="grid-card patients-catalog-card" style="margin-top: 20px; overflow-x: auto;">
       <h3 class="section-title" style="margin-bottom: 16px;">Danh mục hồ sơ khách hàng ({{ filteredPatients.length }} bệnh nhân)</h3>
       
       <table class="data-table" v-if="filteredPatients.length > 0">
         <thead>
           <tr>
-            <th>Họ và tên</th>
+            <th>Bệnh nhân</th>
             <th>Ngày sinh / Tuổi</th>
             <th>Giới tính</th>
             <th>Cân nặng</th>
@@ -384,28 +456,39 @@ const deletePatient = async (patient: Patient) => {
         <tbody>
           <tr v-for="p in filteredPatients" :key="p.PatientId">
             <td>
-              <div class="patient-name-cell">
-                <span class="patient-title">{{ p.FullName }}</span>
-                <small class="patient-sub">{{ p.Phone }}</small>
+              <div class="patient-profile-cell">
+                <div :class="['patient-avatar', p.Gender === 'Nữ' ? 'female' : 'male']">
+                  {{ getInitials(p.FullName) }}
+                </div>
+                <div class="patient-name-cell">
+                  <span class="patient-title">{{ p.FullName }}</span>
+                  <small class="patient-sub">{{ p.Phone }}</small>
+                </div>
               </div>
             </td>
-            <td>{{ p.DateOfBirth }} <small>({{ calculateAge(p.DateOfBirth) }}t)</small></td>
+            <td>
+              <div class="birth-cell">
+                <span class="birth-date">{{ p.DateOfBirth }}</span>
+                <small class="birth-age">({{ calculateAge(p.DateOfBirth) }} tuổi)</small>
+              </div>
+            </td>
             <td>{{ p.Gender }}</td>
             <td><strong class="weight-text">{{ p.WeightKg ? p.WeightKg + ' kg' : '-' }}</strong></td>
             <td>
               <div class="special-badges-list">
-                <span v-if="p.IsPregnant" class="status-tag danger">🤰 Mang thai</span>
-                <span v-if="p.IsBreastfeeding" class="status-tag warning">🍼 Con bú</span>
-                <span v-if="!p.IsPregnant && !p.IsBreastfeeding" class="light-tag">Bình thường</span>
+                <span v-if="p.IsPregnant" class="status-tag danger pregnant-tag">🤰 Mang thai</span>
+                <span v-if="p.IsBreastfeeding" class="status-tag warning breastfeeding-tag">🍼 Con bú</span>
+                <span v-if="!p.IsPregnant && !p.IsBreastfeeding" class="light-tag normal-tag">✓ Bình thường</span>
               </div>
             </td>
             <td>
               <div class="allergies-preview-list" v-if="getPatientAllergiesList(p.PatientId).length > 0">
                 <span v-for="alg in getPatientAllergiesList(p.PatientId)" :key="alg.id" :class="['alg-preview-tag', alg.severity === 'Nghiêm trọng' || alg.severity === 'High' ? 'high' : 'medium']" :title="alg.note || 'Không có ghi chú'">
+                  <span class="dot"></span>
                   {{ alg.targetName }}
                 </span>
               </div>
-              <span v-else class="empty-preview">-</span>
+              <span v-else class="empty-preview">✓ Không dị ứng</span>
             </td>
             <td>
               <div class="diseases-preview-list" v-if="getPatientDiseasesList(p.PatientId).length > 0">
@@ -418,13 +501,20 @@ const deletePatient = async (patient: Patient) => {
             <td>
               <div class="action-buttons-group">
                 <button class="action-btn-icon view" @click="openDetail(p)" title="Xem chi tiết bệnh án">
-                  👁️
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
                 </button>
                 <button class="action-btn-icon edit" v-if="canManage" @click="openEditForm(p)" title="Chỉnh sửa hồ sơ">
-                  ✏️
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
                 </button>
                 <button class="action-btn-icon delete" v-if="canManage" @click="deletePatient(p)" title="Xóa hồ sơ">
-                  🗑️
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
                 </button>
               </div>
             </td>
@@ -449,10 +539,15 @@ const deletePatient = async (patient: Patient) => {
       <div class="modal-card detail-modal">
         <div class="modal-header">
           <div class="modal-title-area">
-            <span class="modal-indicator">HS-00{{ selectedPatient.PatientId }}</span>
+            <span class="modal-indicator">Mã HS: #HS-00{{ selectedPatient.PatientId }}</span>
             <h3>Hồ sơ bệnh án: {{ selectedPatient.FullName }}</h3>
           </div>
-          <button class="close-modal-btn" @click="showDetailModal = false">×</button>
+          <button class="close-modal-btn" @click="showDetailModal = false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
 
         <div class="modal-body scrollable-body">
@@ -463,30 +558,30 @@ const deletePatient = async (patient: Patient) => {
             </div>
             <div class="detail-item">
               <span class="detail-label">Số điện thoại liên hệ:</span>
-              <span>{{ selectedPatient.Phone }}</span>
+              <span class="detail-val-text">{{ selectedPatient.Phone }}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Ngày sinh:</span>
-              <span>{{ selectedPatient.DateOfBirth }} ({{ calculateAge(selectedPatient.DateOfBirth) }} tuổi)</span>
+              <span class="detail-val-text">{{ selectedPatient.DateOfBirth }} <small>({{ calculateAge(selectedPatient.DateOfBirth) }} tuổi)</small></span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Giới tính:</span>
-              <span>{{ selectedPatient.Gender }}</span>
+              <span class="detail-val-text">{{ selectedPatient.Gender }}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Cân nặng hiện tại:</span>
-              <span>{{ selectedPatient.WeightKg ? selectedPatient.WeightKg + ' kg' : 'Chưa cập nhật' }}</span>
+              <span class="detail-val-text"><strong class="weight-text">{{ selectedPatient.WeightKg ? selectedPatient.WeightKg + ' kg' : 'Chưa cập nhật' }}</strong></span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Địa chỉ liên hệ:</span>
-              <span>{{ selectedPatient.Address || '-' }}</span>
+              <span class="detail-val-text">{{ selectedPatient.Address || '-' }}</span>
             </div>
             <div class="detail-item span-2">
               <span class="detail-label">Đối tượng đặc biệt:</span>
               <div class="special-badges-list" style="margin-top: 4px;">
-                <span v-if="selectedPatient.IsPregnant" class="status-tag danger" style="padding: 4px 10px;">🤰 Phụ nữ mang thai</span>
-                <span v-if="selectedPatient.IsBreastfeeding" class="status-tag warning" style="padding: 4px 10px;">🍼 Đang nuôi con bằng sữa mẹ</span>
-                <span v-if="!selectedPatient.IsPregnant && !selectedPatient.IsBreastfeeding" class="light-tag" style="padding: 4px 10px;">Đối tượng bình thường</span>
+                <span v-if="selectedPatient.IsPregnant" class="status-tag danger pregnant-tag" style="padding: 4px 10px;">🤰 Phụ nữ mang thai</span>
+                <span v-if="selectedPatient.IsBreastfeeding" class="status-tag warning breastfeeding-tag" style="padding: 4px 10px;">🍼 Nuôi con bằng sữa mẹ</span>
+                <span v-if="!selectedPatient.IsPregnant && !selectedPatient.IsBreastfeeding" class="light-tag normal-tag" style="padding: 4px 10px;">Đối tượng bình thường</span>
               </div>
             </div>
             <div class="detail-item span-2" v-if="selectedPatient.Note">
@@ -497,14 +592,19 @@ const deletePatient = async (patient: Patient) => {
 
           <!-- Section A: Allergies list -->
           <div class="medical-section-box">
-            <h4 class="sub-title text-danger">⚠️ Tiền sử Dị ứng thuốc & Hoạt chất</h4>
+            <h4 class="sub-title text-danger flex-center" style="justify-content: flex-start; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="text-danger-icon">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Tiền sử Dị ứng thuốc & Hoạt chất
+            </h4>
             <div class="table-container" v-if="getPatientAllergiesList(selectedPatient!.PatientId).length > 0">
               <table class="dashboard-table">
                 <thead>
                   <tr>
-                    <th>Loại</th>
+                    <th>Loại tác nhân</th>
                     <th>Tác nhân gây dị ứng</th>
-                    <th>Mức độ nguy hiểm</th>
+                    <th>Mức độ</th>
                     <th>Ghi chú lâm sàng</th>
                   </tr>
                 </thead>
@@ -517,7 +617,7 @@ const deletePatient = async (patient: Patient) => {
                         {{ alg.severity }}
                       </span>
                     </td>
-                    <td><small>{{ alg.note || '-' }}</small></td>
+                    <td><small class="text-muted">{{ alg.note || '-' }}</small></td>
                   </tr>
                 </tbody>
               </table>
@@ -529,7 +629,12 @@ const deletePatient = async (patient: Patient) => {
 
           <!-- Section B: Diseases list -->
           <div class="medical-section-box" style="margin-top: 16px;">
-            <h4 class="sub-title text-warning">🏥 Bệnh lý nền đang mắc</h4>
+            <h4 class="sub-title text-warning flex-center" style="justify-content: flex-start; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="text-warning-icon">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Bệnh lý nền đang mắc
+            </h4>
             <div class="table-container" v-if="getPatientDiseasesList(selectedPatient!.PatientId).length > 0">
               <table class="dashboard-table">
                 <thead>
@@ -541,7 +646,7 @@ const deletePatient = async (patient: Patient) => {
                 <tbody>
                   <tr v-for="dis in getPatientDiseasesList(selectedPatient!.PatientId)" :key="dis.id">
                     <td><strong>{{ dis.name }}</strong></td>
-                    <td><small>{{ dis.note || '-' }}</small></td>
+                    <td><small class="text-muted">{{ dis.note || '-' }}</small></td>
                   </tr>
                 </tbody>
               </table>
@@ -553,7 +658,12 @@ const deletePatient = async (patient: Patient) => {
 
           <!-- Section C: Transaction history -->
           <div class="medical-section-box" style="margin-top: 16px;">
-            <h4 class="sub-title text-info">💰 Lịch sử mua thuốc tại cửa hàng</h4>
+            <h4 class="sub-title text-info flex-center" style="justify-content: flex-start; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="text-info-icon">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 8h6m-5 0a3 3 0 110 6H9l3 3m-3-6h6m6 1a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Lịch sử mua thuốc tại cửa hàng
+            </h4>
             <div class="table-container" v-if="getPatientSalesHistory(selectedPatient!.PatientId).length > 0">
               <table class="dashboard-table">
                 <thead>
@@ -606,7 +716,12 @@ const deletePatient = async (patient: Patient) => {
           <div class="modal-title-area">
             <h3>{{ isEditing ? 'Chỉnh sửa thông tin hồ sơ bệnh án' : 'Tạo hồ sơ bệnh nhân mới' }}</h3>
           </div>
-          <button class="close-modal-btn" @click="showFormModal = false">×</button>
+          <button class="close-modal-btn" @click="showFormModal = false">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
 
         <div class="modal-body scrollable-body">
@@ -723,7 +838,12 @@ const deletePatient = async (patient: Patient) => {
 
                 <!-- Remove row button -->
                 <div class="col-delete">
-                  <button type="button" class="delete-row-btn" @click="removeAllergyRow(idx)">×</button>
+                  <button type="button" class="delete-row-btn" @click="removeAllergyRow(idx)">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -757,7 +877,12 @@ const deletePatient = async (patient: Patient) => {
 
                 <!-- Remove row button -->
                 <div class="col-delete">
-                  <button type="button" class="delete-row-btn" @click="removeDiseaseRow(idx)">×</button>
+                  <button type="button" class="delete-row-btn" @click="removeDiseaseRow(idx)">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -781,6 +906,79 @@ const deletePatient = async (patient: Patient) => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Dashboard Statistics Grid */
+.stats-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 20px;
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-light);
+}
+.stat-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.total-patients .stat-icon-wrapper {
+  background: var(--primary-bg);
+  color: var(--primary-medium);
+}
+.pregnant-patients .stat-icon-wrapper {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.breastfeeding-patients .stat-icon-wrapper {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.allergic-patients .stat-icon-wrapper {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--danger);
+}
+.stat-icon {
+  width: 24px;
+  height: 24px;
+  color: currentColor;
+}
+.stat-emoji {
+  line-height: 1;
+}
+.stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
 }
 
 /* Search and Filters panel styling */
@@ -788,6 +986,11 @@ const deletePatient = async (patient: Patient) => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
 }
 .filters-row {
   display: flex;
@@ -814,16 +1017,20 @@ const deletePatient = async (patient: Patient) => {
   display: flex;
   align-items: center;
 }
-.search-input-wrapper input {
-  padding-right: 36px;
+.form-control-with-icon {
+  padding-left: 38px !important;
 }
 .search-icon-svg {
   position: absolute;
-  right: 12px;
+  left: 14px;
   width: 18px;
   height: 18px;
   color: var(--text-muted);
   pointer-events: none;
+  transition: color var(--transition-fast);
+}
+.search-input-wrapper input:focus ~ .search-icon-svg {
+  color: var(--primary-medium);
 }
 .panel-actions-row {
   display: flex;
@@ -833,7 +1040,34 @@ const deletePatient = async (patient: Patient) => {
   padding-top: 14px;
 }
 
-/* Patient Name Cell */
+/* Patient profile Avatar & Name cell */
+.patient-profile-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.patient-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--border-radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1.5px solid transparent;
+  user-select: none;
+}
+.patient-avatar.male {
+  background-color: var(--primary-bg);
+  color: var(--primary);
+  border-color: rgba(13, 148, 136, 0.15);
+}
+.patient-avatar.female {
+  background-color: rgba(236, 72, 153, 0.08);
+  color: #db2777;
+  border-color: rgba(236, 72, 153, 0.15);
+}
 .patient-name-cell {
   display: flex;
   flex-direction: column;
@@ -845,16 +1079,29 @@ const deletePatient = async (patient: Patient) => {
 }
 .patient-sub {
   color: var(--text-muted);
+  font-size: 12.5px;
+}
+.birth-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.birth-date {
+  font-weight: 500;
+}
+.birth-age {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 .weight-text {
   color: var(--text-main);
 }
 
-/* Special badges list */
+/* Badges styling */
 .special-badges-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
 }
 .light-tag {
   font-size: 11px;
@@ -866,37 +1113,72 @@ const deletePatient = async (patient: Patient) => {
   border-radius: var(--border-radius-sm);
   display: inline-block;
 }
+.pregnant-tag {
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.12);
+}
+.breastfeeding-tag {
+  background-color: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.12);
+}
+.normal-tag {
+  background-color: var(--success-bg);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+}
 
 /* Allergies and Diseases previews */
 .allergies-preview-list, .diseases-preview-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
 }
-.alg-preview-tag, .dis-preview-tag {
+.alg-preview-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.alg-preview-tag .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 .alg-preview-tag.high {
   background-color: var(--danger-bg);
   color: var(--danger);
   border: 1px solid rgba(239, 68, 68, 0.15);
 }
+.alg-preview-tag.high .dot {
+  background-color: var(--danger);
+  animation: pulse 1.5s infinite;
+}
 .alg-preview-tag.medium {
   background-color: var(--warning-bg);
   color: var(--warning);
   border: 1px solid rgba(245, 158, 11, 0.15);
 }
+.alg-preview-tag.medium .dot {
+  background-color: var(--warning);
+}
 .dis-preview-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
   background-color: var(--info-bg);
   color: var(--info);
   border: 1px solid rgba(59, 130, 246, 0.15);
+  display: inline-block;
 }
 .empty-preview {
   color: var(--text-muted);
+  font-size: 13px;
 }
 
 /* Action button icons in table */
@@ -906,33 +1188,44 @@ const deletePatient = async (patient: Patient) => {
   gap: 8px;
 }
 .action-btn-icon {
-  background: var(--bg-main);
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  transition: all 0.2s;
+  color: var(--text-muted);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .action-btn-icon:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
 .action-btn-icon.view:hover {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: var(--info-bg);
+  color: var(--info);
   border-color: var(--info);
 }
 .action-btn-icon.edit:hover {
-  background-color: rgba(245, 158, 11, 0.1);
+  background-color: var(--warning-bg);
+  color: var(--warning);
   border-color: var(--warning);
 }
 .action-btn-icon.delete:hover {
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: var(--danger-bg);
+  color: var(--danger);
   border-color: var(--danger);
+}
+
+/* Hover effect on table rows */
+.data-table tbody tr {
+  transition: background-color 0.2s;
+}
+.data-table tbody tr:hover {
+  background-color: rgba(13, 148, 136, 0.02) !important;
 }
 
 /* Empty State */
@@ -961,20 +1254,86 @@ const deletePatient = async (patient: Patient) => {
   margin: 0;
 }
 
-/* Modals */
-.detail-modal, .form-modal {
+/* Modals Refactored Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+.modal-card {
+  background: var(--bg-card);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-premium);
+  border: 1px solid var(--border-color);
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   width: 100%;
-  max-width: 700px;
+  max-width: 750px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.03) 0%, rgba(255, 255, 255, 0) 100%);
+}
+.modal-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.modal-title-area h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+.modal-indicator {
+  align-self: flex-start;
+  background: var(--primary-bg);
+  color: var(--primary-medium);
+  padding: 3px 8px;
+  border-radius: var(--border-radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border: 1px solid rgba(13, 148, 136, 0.12);
+}
+.close-modal-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.close-modal-btn:hover {
+  background-color: var(--bg-main);
+  color: var(--danger);
+  transform: rotate(90deg);
 }
 .scrollable-body {
-  max-height: 60vh;
+  max-height: 65vh;
   overflow-y: auto;
-  padding-right: 6px;
+  padding: 24px;
 }
 .detail-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 24px;
   margin-bottom: 24px;
 }
 .detail-item {
@@ -992,38 +1351,76 @@ const deletePatient = async (patient: Patient) => {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.detail-val-strong {
-  font-size: 18px;
-  font-weight: 800;
+.detail-val-text {
+  font-size: 14.5px;
   color: var(--text-main);
+  font-weight: 600;
+}
+.detail-val-strong {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--primary);
 }
 .detail-text-box {
   background-color: var(--bg-main);
   border: 1px solid var(--border-color);
-  padding: 12px;
+  padding: 12px 16px;
   border-radius: var(--border-radius-md);
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-main);
-  line-height: 1.5;
-  margin: 0;
+  line-height: 1.6;
+  margin-top: 4px;
 }
 
 /* Medical sections inside modal */
 .medical-section-box {
   border-top: 1px solid var(--border-color);
-  padding-top: 16px;
+  padding-top: 20px;
+  margin-top: 20px;
 }
-.sub-title {
+.medical-section-box .sub-title {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
   margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.text-danger-icon { color: var(--danger); }
+.text-warning-icon { color: var(--warning); }
+.text-info-icon { color: var(--info); }
+
+.table-container {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+}
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.dashboard-table th {
+  background-color: var(--bg-main);
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1.5px solid var(--border-color);
+}
+.dashboard-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13.5px;
+}
+.dashboard-table tr:last-child td {
+  border-bottom: none;
 }
 .empty-medical-box {
   background-color: var(--bg-main);
   border: 1px dashed var(--border-color);
   padding: 14px;
   border-radius: var(--border-radius-md);
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-muted);
   text-align: center;
 }
@@ -1035,8 +1432,8 @@ const deletePatient = async (patient: Patient) => {
 .form-inputs-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 16px 20px;
+  margin-bottom: 24px;
 }
 .form-group {
   display: flex;
@@ -1067,7 +1464,7 @@ const deletePatient = async (patient: Patient) => {
   position: relative;
   padding-left: 24px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--text-main);
   user-select: none;
@@ -1127,7 +1524,7 @@ const deletePatient = async (patient: Patient) => {
   position: relative;
   padding-left: 28px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--text-main);
   user-select: none;
@@ -1175,27 +1572,33 @@ const deletePatient = async (patient: Patient) => {
   transform: rotate(45deg);
 }
 
-/* Form Allergy Row */
+/* Form Allergy & Mapping rows styling */
 .form-allergy-row-flex {
   display: flex;
   gap: 12px;
   align-items: center;
+  background: var(--bg-main);
+  padding: 8px 12px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
 }
 .allergy-type-toggle-btn {
-  background-color: var(--bg-main);
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-main);
   font-size: 12px;
   font-weight: 700;
   padding: 8px 10px;
-  border-radius: var(--border-radius-md);
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
   transition: all 0.2s;
   min-width: 90px;
+  text-align: center;
 }
 .allergy-type-toggle-btn:hover {
   border-color: var(--primary-medium);
   color: var(--primary-medium);
+  background-color: var(--primary-bg);
 }
 .col-select {
   flex: 2;
@@ -1215,52 +1618,62 @@ const deletePatient = async (patient: Patient) => {
 .delete-row-btn {
   background: transparent;
   border: none;
-  font-size: 24px;
-  line-height: 1;
   color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.2s;
-  padding: 0 4px;
+  transition: all 0.2s;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
 }
 .delete-row-btn:hover {
   color: var(--danger);
+  background-color: var(--danger-bg);
 }
 
 /* Dynamic ingredients mappings form */
 .form-ingredients-mapping-section {
   border-top: 1px solid var(--border-color);
-  padding-top: 16px;
+  padding-top: 20px;
 }
 .ingredients-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .add-row-btn {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: var(--primary-bg);
   color: var(--primary-medium);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  padding: 6px 12px;
+  border: 1px solid rgba(13, 148, 136, 0.15);
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 700;
-  border-radius: var(--border-radius-md);
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
   transition: all 0.2s;
 }
 .add-row-btn:hover {
   background-color: var(--primary-medium);
   color: #fff;
+  border-color: var(--primary-medium);
 }
 .form-ingredients-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 .form-ingredient-row {
   display: flex;
   gap: 12px;
   align-items: center;
+  background: var(--bg-main);
+  padding: 8px 12px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
 }
 .empty-ingredients-form {
   background-color: var(--bg-main);
@@ -1269,6 +1682,31 @@ const deletePatient = async (patient: Patient) => {
   border-radius: var(--border-radius-md);
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 13.5px;
+}
+
+/* Modal footers */
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background-color: var(--bg-main);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 </style>
