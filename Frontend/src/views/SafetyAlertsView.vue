@@ -56,6 +56,32 @@ const sortedDiseases = computed(() => {
   return [...store.diseases.value].sort((a, b) => a.DiseaseName.localeCompare(b.DiseaseName))
 })
 
+const severityFilter = ref<string>('All')
+const contraSeverityFilter = ref<string>('All')
+
+// Thống kê tương tác hoạt chất
+const interactionStats = computed(() => {
+  const list = store.drugInteractions.value
+  const high = list.filter(di => {
+    const s = di.Severity.toLowerCase()
+    return s.includes('nghiêm trọng') || s.includes('cao') || s.includes('high')
+  }).length
+  const medium = list.filter(di => {
+    const s = di.Severity.toLowerCase()
+    return s.includes('trung bình') || s.includes('vừa') || s.includes('medium')
+  }).length
+  const low = list.length - high - medium
+  return { total: list.length, high, medium, low }
+})
+
+// Thống kê chống chỉ định
+const contraindicationStats = computed(() => {
+  const list = store.contraindications.value
+  const disease = list.filter(c => c.DiseaseId).length
+  const special = list.filter(c => c.ConditionType === 'Đối tượng đặc biệt').length
+  return { total: list.length, disease, special }
+})
+
 // Filtered drug interactions list
 const filteredInteractions = computed(() => {
   const query = searchQuery.value.toLowerCase().trim()
@@ -65,12 +91,14 @@ const filteredInteractions = computed(() => {
     const desc = di.Description?.toLowerCase() || ''
     const recom = di.Recommendation?.toLowerCase() || ''
 
-    return (
-      ingAName.includes(query) ||
+    const matchesQuery = ingAName.includes(query) ||
       ingBName.includes(query) ||
       desc.includes(query) ||
       recom.includes(query)
-    )
+
+    const matchesSeverity = severityFilter.value === 'All' || di.Severity === severityFilter.value
+
+    return matchesQuery && matchesSeverity
   })
 })
 
@@ -85,14 +113,16 @@ const filteredContraindications = computed(() => {
     const desc = c.Description?.toLowerCase() || ''
     const recom = c.Recommendation?.toLowerCase() || ''
 
-    return (
-      medName.includes(query) ||
+    const matchesQuery = medName.includes(query) ||
       ingName.includes(query) ||
       diseaseName.includes(query) ||
       condType.includes(query) ||
       desc.includes(query) ||
       recom.includes(query)
-    )
+
+    const matchesSeverity = contraSeverityFilter.value === 'All' || c.Severity === contraSeverityFilter.value
+
+    return matchesQuery && matchesSeverity
   })
 })
 
@@ -286,20 +316,94 @@ const getSeverityClass = (severity: string) => {
       </div>
     </div>
 
+    <!-- Clinical Dashboard Interactive Stats -->
+    <div v-if="activeSubTab === 'interactions'" class="stats-row">
+      <div class="stat-card total">
+        <div class="stat-icon-wrapper">🧪</div>
+        <div class="stat-content">
+          <span class="stat-label">Tổng cặp tương tác</span>
+          <span class="stat-value">{{ interactionStats.total }}</span>
+        </div>
+      </div>
+      <div class="stat-card high">
+        <div class="stat-icon-wrapper">🔴</div>
+        <div class="stat-content">
+          <span class="stat-label">Nghiêm trọng (High)</span>
+          <span class="stat-value text-danger">{{ interactionStats.high }}</span>
+        </div>
+      </div>
+      <div class="stat-card medium">
+        <div class="stat-icon-wrapper">🟡</div>
+        <div class="stat-content">
+          <span class="stat-label">Trung bình (Medium)</span>
+          <span class="stat-value text-warning">{{ interactionStats.medium }}</span>
+        </div>
+      </div>
+      <div class="stat-card low">
+        <div class="stat-icon-wrapper">🔵</div>
+        <div class="stat-content">
+          <span class="stat-label">Nhẹ (Low)</span>
+          <span class="stat-value text-info">{{ interactionStats.low }}</span>
+        </div>
+      </div>
+    </div>
+    <div v-else class="stats-row">
+      <div class="stat-card total">
+        <div class="stat-icon-wrapper">⚠️</div>
+        <div class="stat-content">
+          <span class="stat-label">Tổng chống chỉ định</span>
+          <span class="stat-value">{{ contraindicationStats.total }}</span>
+        </div>
+      </div>
+      <div class="stat-card disease">
+        <div class="stat-icon-wrapper">🤒</div>
+        <div class="stat-content">
+          <span class="stat-label">Do bệnh nền</span>
+          <span class="stat-value text-warning">{{ contraindicationStats.disease }}</span>
+        </div>
+      </div>
+      <div class="stat-card special">
+        <div class="stat-icon-wrapper">🤰</div>
+        <div class="stat-content">
+          <span class="stat-label">Đối tượng đặc biệt</span>
+          <span class="stat-value text-danger">{{ contraindicationStats.special }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Actions Area -->
     <div class="table-container">
       <div class="table-actions">
-        <div class="search-wrapper">
-          <svg viewBox="0 0 24 24" class="search-icon" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input 
-            type="text" 
-            class="search-input-small form-control-with-icon" 
-            v-model="searchQuery" 
-            :placeholder="activeSubTab === 'interactions' ? 'Tìm hoạt chất, mô tả...' : 'Tìm thuốc, hoạt chất, bệnh nền...'"
-          />
+        <div class="search-and-filters">
+          <div class="search-wrapper">
+            <svg viewBox="0 0 24 24" class="search-icon" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input 
+              type="text" 
+              class="search-input-small form-control-with-icon" 
+              v-model="searchQuery" 
+              :placeholder="activeSubTab === 'interactions' ? 'Tìm hoạt chất, mô tả...' : 'Tìm thuốc, hoạt chất, bệnh nền...'"
+            />
+          </div>
+          
+          <div class="filter-wrapper" v-if="activeSubTab === 'interactions'">
+            <select class="filter-select form-control" v-model="severityFilter">
+              <option value="All">Tất cả mức độ</option>
+              <option value="Nghiêm trọng">Nghiêm trọng (High)</option>
+              <option value="Trung bình">Trung bình (Medium)</option>
+              <option value="Nhẹ">Nhẹ (Low)</option>
+            </select>
+          </div>
+          <div class="filter-wrapper" v-else>
+            <select class="filter-select form-control" v-model="contraSeverityFilter">
+              <option value="All">Tất cả mức độ</option>
+              <option value="Nghiêm trọng">Nghiêm trọng (High)</option>
+              <option value="Trung bình">Trung bình (Medium)</option>
+              <option value="Nhẹ">Nhẹ (Low)</option>
+            </select>
+          </div>
         </div>
         
         <div v-if="canManage">
@@ -325,9 +429,8 @@ const getSeverityClass = (severity: string) => {
         <table class="data-table">
           <thead>
             <tr>
-              <th>Hoạt chất A</th>
-              <th>Hoạt chất B</th>
-              <th style="width: 120px; text-align: center;">Mức độ cảnh báo</th>
+              <th>Cặp hoạt chất đối kháng</th>
+              <th style="width: 150px; text-align: center;">Mức độ cảnh báo</th>
               <th>Mô tả tương tác tác hại</th>
               <th>Khuyến cáo lâm sàng</th>
               <th v-if="canManage" style="width: 120px; text-align: center;">Hành động</th>
@@ -335,8 +438,21 @@ const getSeverityClass = (severity: string) => {
           </thead>
           <tbody>
             <tr v-for="di in filteredInteractions" :key="di.InteractionId">
-              <td><strong>{{ store.activeIngredients.value.find(ai => ai.IngredientId === di.IngredientAId)?.IngredientName || `Mã #${di.IngredientAId}` }}</strong></td>
-              <td><strong>{{ store.activeIngredients.value.find(ai => ai.IngredientId === di.IngredientBId)?.IngredientName || `Mã #${di.IngredientBId}` }}</strong></td>
+              <td>
+                <div class="interaction-pair-cell">
+                  <span class="ing-badge ing-a">
+                    {{ store.activeIngredients.value.find(ai => ai.IngredientId === di.IngredientAId)?.IngredientName || `Mã #${di.IngredientAId}` }}
+                  </span>
+                  <div class="interaction-flow-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="flow-icon">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                    </svg>
+                  </div>
+                  <span class="ing-badge ing-b">
+                    {{ store.activeIngredients.value.find(ai => ai.IngredientId === di.IngredientBId)?.IngredientName || `Mã #${di.IngredientBId}` }}
+                  </span>
+                </div>
+              </td>
               <td style="text-align: center;">
                 <span :class="['status-tag', getSeverityClass(di.Severity)]">
                   {{ di.Severity }}
@@ -361,7 +477,7 @@ const getSeverityClass = (severity: string) => {
               </td>
             </tr>
             <tr v-if="filteredInteractions.length === 0">
-              <td :colspan="canManage ? 6 : 5" class="empty-placeholder">
+              <td :colspan="canManage ? 5 : 4" class="empty-placeholder">
                 Không tìm thấy thông tin tương tác hoạt chất nào.
               </td>
             </tr>
@@ -890,6 +1006,118 @@ const getSeverityClass = (severity: string) => {
 @keyframes slideUp {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Clinical Dashboard Stats Styling */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.stat-icon-wrapper {
+  font-size: 24px;
+  width: 48px;
+  height: 48px;
+  background-color: var(--bg-main);
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat-content {
+  display: flex;
+  flex-direction: column;
+}
+.stat-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+
+/* Severity text coloring helpers */
+.text-danger {
+  color: var(--danger) !important;
+}
+.text-warning {
+  color: var(--warning) !important;
+}
+.text-info {
+  color: var(--info) !important;
+}
+
+/* Search and Filters wrapper styling */
+.search-and-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.filter-wrapper {
+  width: 180px;
+}
+.filter-select {
+  height: 38px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-color: var(--border-color);
+}
+
+/* Visual Interaction Link Cell Styling */
+.interaction-pair-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ing-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--border-radius-md);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.ing-badge.ing-a {
+  background-color: rgba(13, 148, 136, 0.05);
+  color: var(--primary-medium);
+  border-color: rgba(13, 148, 136, 0.15);
+}
+.ing-badge.ing-b {
+  background-color: rgba(59, 130, 246, 0.05);
+  color: var(--info);
+  border-color: rgba(59, 130, 246, 0.15);
+}
+.interaction-flow-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+.flow-icon {
+  width: 18px;
+  height: 18px;
 }
 
 @media (max-width: 768px) {
